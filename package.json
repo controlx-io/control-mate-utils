@@ -1,6 +1,6 @@
 {
   "name": "control-mate-utils",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Network and resource management utility for ControlMate PC",
   "scripts": {
     "build": "npm run build-css && npm run build-go",
@@ -12,7 +12,8 @@
     "dev:go": "go run main.go",
     "clean": "rm -rf ./build && rm -rf ./release",
     "prebuild": "npm run setup",
-    "postbuild": "echo 'Build complete! Binary: ./release/control-mate-utils main.go'"
+    "postbuild": "echo 'Build complete! Binary: ./release/control-mate-utils main.go'",
+    "publish": "node scripts/publish.js"
   },
   "devDependencies": {
     "tailwindcss": "^3.4.0",

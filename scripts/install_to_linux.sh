@@ -1,26 +1,28 @@
 #!/bin/bash
 
 # ==============================================================================
-# jaspernode_install.sh
-# v.1.0.9
+# control-mate-utils_install.sh
+# v.1.0.0
 #
-# Installs, updates, or uninstalls the jaspernode binary as a user-level systemd service.
+# Installs, updates, or uninstalls the control-mate-utils binary as a systemd service.
 #
 # Usage (Install/Update):
-#   curl -sL https://dl.jasperx.io/jn/linux-install.sh | bash -
+#   curl -sL https://raw.githubusercontent.com/controlx-io/control-mate-utils/refs/heads/main/scripts/install_to_linux.sh | sudo -E bash -
 #
 # Usage (Uninstall):
-#   curl -sL https://dl.jasperx.io/jn/linux-install.sh | bash -s -- uninstall
+#   curl -sL https://raw.githubusercontent.com/controlx-io/control-mate-utils/refs/heads/main/scripts/install_to_linux.sh | sudo -E bash -s -- uninstall
 #
 # ==============================================================================
 
 # --- Configuration ---
-SERVICE_NAME="jaspernode"
-APP_DIR="${HOME}/.local/share/jaspernode"
-BINARY_PATH="${HOME}/.local/bin/jaspernode"
+SERVICE_NAME="cm-utils"
+INSTALL_USER="cm-utils"
+APP_DIR="/var/lib/cm-utils"
+BINARY_PATH="${APP_DIR}/cm-utils"
+SYMLINK_PATH="/usr/local/bin/cm-utils"
 VERSION_FILE="${APP_DIR}/.version"
-BASE_URL="https://dl.jasperx.io/jn"
-SERVICE_FILE="${HOME}/.config/systemd/user/${SERVICE_NAME}.service"
+GITHUB_REPO="controlx-io/control-mate-utils"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
 # --- Color Definitions ---
 C_RESET='\033[0m'
@@ -55,13 +57,21 @@ get_latest_version_info() {
     info "Checking for the latest version..." >&2
 
     local latest_version
-    latest_version=$(curl -sL "${BASE_URL}/latest" | tr -d '[:space:]')
+    latest_version=$(curl -sL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//')
     if [ -z "$latest_version" ]; then
         error "Could not determine the latest version." >&2
         exit 1
     fi
 
-    local download_url="${BASE_URL}/${arch}/${latest_version}"
+    # Map architecture to GitHub release asset naming
+    local asset_name
+    case $arch in
+        linux64) asset_name="cm-utils-linux-amd64" ;;
+        linuxA64) asset_name="cm-utils-linux-arm64" ;;
+        *) error "Unsupported architecture: $arch" >&2; exit 1 ;;
+    esac
+
+    local download_url="https://github.com/${GITHUB_REPO}/releases/download/v${latest_version}/${asset_name}"
 
     echo "${latest_version}|${download_url}"
 }
@@ -75,12 +85,12 @@ get_installed_version() {
 }
 
 uninstall_app() {
-    info "Starting JasperNode uninstallation..."
+    info "Starting ControlMate Utils uninstallation..."
 
-    if systemctl --user list-units --full -all | grep -Fq "${SERVICE_NAME}.service"; then
+    if systemctl list-units --full -all | grep -Fq "${SERVICE_NAME}.service"; then
         info "Stopping and disabling ${SERVICE_NAME} service..."
-        systemctl --user stop "${SERVICE_NAME}"
-        systemctl --user disable "${SERVICE_NAME}"
+        systemctl stop "${SERVICE_NAME}"
+        systemctl disable "${SERVICE_NAME}"
     else
         info "Service ${SERVICE_NAME} not found, skipping."
     fi
@@ -91,11 +101,11 @@ uninstall_app() {
     fi
 
     info "Reloading systemd daemon..."
-    systemctl --user daemon-reload
+    systemctl daemon-reload
 
-    if [ -f "${BINARY_PATH}" ]; then
-        info "Removing binary ${BINARY_PATH}..."
-        rm -f "${BINARY_PATH}"
+    if [ -L "${SYMLINK_PATH}" ]; then
+        info "Removing symlink ${SYMLINK_PATH}..."
+        rm -f "${SYMLINK_PATH}"
     fi
 
     if [ -d "${APP_DIR}" ]; then
@@ -103,12 +113,31 @@ uninstall_app() {
         rm -rf "${APP_DIR}"
     fi
 
+    if id "${INSTALL_USER}" &>/dev/null; then
+        warn "The user '${INSTALL_USER}' exists."
+        read -p "Do you want to remove this user? (y/N) " -n 1 -r REPLY < /dev/tty
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            info "Removing user '${INSTALL_USER}'..."
+            userdel -r "${INSTALL_USER}"
+        else
+            info "User '${INSTALL_USER}' was not removed."
+        fi
+    fi
+
     echo
-    echo -e "${C_GREEN}✔ JasperNode has been uninstalled successfully.${C_RESET}"
+    echo -e "${C_GREEN}✔ ControlMate Utils has been uninstalled successfully.${C_RESET}"
     exit 0
 }
 
+
 # --- Main Logic ---
+
+# 1. Check for root privileges
+if [ "$(id -u)" -ne 0 ]; then
+    error "This installer must be run as root or with sudo."
+    exit 1
+fi
 
 # Handle uninstall command
 if [ "$1" == "uninstall" ]; then
@@ -128,7 +157,7 @@ fi
 IFS='|' read -r LATEST_VERSION DOWNLOAD_URL <<< "$VERSION_INFO"
 
 if [ "$INSTALLED_VERSION" != "not-installed" ]; then
-    info "JasperNode is already installed. Version: ${C_CYAN}${INSTALLED_VERSION}${C_RESET}"
+    info "ControlMate Utils is already installed. Version: ${C_CYAN}${INSTALLED_VERSION}${C_RESET}"
     if [ "$INSTALLED_VERSION" == "$LATEST_VERSION" ]; then
         info "You are already running the latest version. Exiting."
         exit 0
@@ -166,7 +195,7 @@ if [ "$INSTALLED_VERSION" != "not-installed" ]; then
         if ! curl -sL --fail "${DOWNLOAD_URL}" -o "${TMP_FILE}"; then
             error "Failed to download the new binary. Restoring from backup."
             mv "${BINARY_PATH}.bak-${INSTALLED_VERSION}" "${BINARY_PATH}"
-            systemctl --user start "${SERVICE_NAME}"
+            systemctl start "${SERVICE_NAME}"
             rm -f "${TMP_FILE}"
             exit 1
         fi
@@ -174,7 +203,7 @@ if [ "$INSTALLED_VERSION" != "not-installed" ]; then
         if [ ! -s "${TMP_FILE}" ]; then
             error "Downloaded file is empty. Restoring from backup."
             mv "${BINARY_PATH}.bak-${INSTALLED_VERSION}" "${BINARY_PATH}"
-            systemctl --user start "${SERVICE_NAME}"
+            systemctl start "${SERVICE_NAME}"
             rm -f "${TMP_FILE}"
             exit 1
         fi
@@ -184,31 +213,29 @@ if [ "$INSTALLED_VERSION" != "not-installed" ]; then
 
         chmod +x "${BINARY_PATH}"
         echo "${LATEST_VERSION}" > "${VERSION_FILE}"
+        chown "${INSTALL_USER}:${INSTALL_USER}" "${BINARY_PATH}" "${VERSION_FILE}"
 
         info "Restarting ${SERVICE_NAME} service..."
-        systemctl --user restart "${SERVICE_NAME}"
+        systemctl restart "${SERVICE_NAME}"
 
         info "Update complete. Waiting a few seconds to check logs..."
         sleep 2
         echo -e "--- Last 25 log lines from ${C_YELLOW}${SERVICE_NAME}${C_RESET} ---"
-        journalctl --user -u ${SERVICE_NAME} -n 25 --no-pager
+        journalctl -u ${SERVICE_NAME} -n 25 --no-pager
         echo "--------------------------------------------------"
         exit 0
     fi
 fi
 
 # --- Fresh Installation Process ---
-info "Starting new JasperNode installation..."
+info "Starting new ControlMate Utils installation..."
 info "Latest version found: ${C_CYAN}${LATEST_VERSION}${C_RESET}"
 
 info "Creating application directory at ${APP_DIR}..."
 mkdir -p "${APP_DIR}"
 
-info "Creating binary directory at ${HOME}/.local/bin..."
-mkdir -p "${HOME}/.local/bin"
-
 TMP_FILE=$(mktemp)
-info "Downloading JasperNode binary to temporary file..."
+info "Downloading ControlMate Utils binary to temporary file..."
 if ! curl -sL --fail "${DOWNLOAD_URL}" -o "${TMP_FILE}"; then
     error "Failed to download the binary."
     rm -f "${TMP_FILE}"
@@ -227,17 +254,28 @@ mv "${TMP_FILE}" "${BINARY_PATH}"
 chmod +x "${BINARY_PATH}"
 info "Binary installed."
 
-info "Creating systemd user service directory..."
-mkdir -p "${HOME}/.config/systemd/user"
+info "Creating symlink at ${SYMLINK_PATH}..."
+ln -sf "${BINARY_PATH}" "${SYMLINK_PATH}"
+
+if id "${INSTALL_USER}" &>/dev/null; then
+    info "User '${INSTALL_USER}' already exists."
+else
+    info "Creating system user '${INSTALL_USER}'..."
+    useradd -r -s /bin/false -d "${APP_DIR}" "${INSTALL_USER}"
+fi
+info "Setting ownership of ${APP_DIR} to ${INSTALL_USER}..."
+chown -R "${INSTALL_USER}:${INSTALL_USER}" "${APP_DIR}"
 
 info "Creating systemd service file..."
 cat << EOF > "${SERVICE_FILE}"
 [Unit]
-Description=JasperNode Service
+Description=CM Utils Service
 After=network.target
 
 [Service]
 ExecStart=${BINARY_PATH}
+User=${INSTALL_USER}
+Group=${INSTALL_USER}
 WorkingDirectory=${APP_DIR}
 Restart=always
 RestartSec=5
@@ -245,24 +283,23 @@ StandardOutput=journal
 StandardError=journal
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 EOF
 
 echo "${LATEST_VERSION}" > "${VERSION_FILE}"
+chown "${INSTALL_USER}:${INSTALL_USER}" "${VERSION_FILE}"
 
 info "Reloading systemd, enabling and starting service..."
-systemctl --user daemon-reload
-systemctl --user enable "${SERVICE_NAME}"
-systemctl --user start "${SERVICE_NAME}"
+systemctl daemon-reload
+systemctl enable "${SERVICE_NAME}"
+systemctl start "${SERVICE_NAME}"
 
 echo
-echo -e "${C_GREEN}✔ JasperNode was installed and started successfully!${C_RESET}"
+echo -e "${C_GREEN}✔ ControlMate Utils was installed and started successfully!${C_RESET}"
 echo
 info "You can manage the service with these commands:"
-echo -e "  - Check status: ${C_YELLOW}systemctl --user status ${SERVICE_NAME}${C_RESET}"
-echo -e "  - View logs:    ${C_YELLOW}journalctl --user -u ${SERVICE_NAME} -f${C_RESET}"
-echo -e "  - Stop service:   ${C_YELLOW}systemctl --user stop ${SERVICE_NAME}${C_RESET}"
-echo -e "  - Restart service:   ${C_YELLOW}systemctl --user restart ${SERVICE_NAME}${C_RESET}"
-echo
-info "The binary is available at: ${C_CYAN}${BINARY_PATH}${C_RESET}"
+echo -e "  - Check status: ${C_YELLOW}systemctl status ${SERVICE_NAME}${C_RESET}"
+echo -e "  - View logs:    ${C_YELLOW}sudo journalctl -u ${SERVICE_NAME} -f${C_RESET}"
+echo -e "  - Stop service:   ${C_YELLOW}sudo systemctl stop ${SERVICE_NAME}${C_RESET}"
+echo -e "  - Restart service:   ${C_YELLOW}sudo systemctl restart ${SERVICE_NAME}${C_RESET}"
 echo
