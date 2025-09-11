@@ -1,0 +1,24 @@
+{
+  "name": "control-mate-utils",
+  "version": "1.0.0",
+  "description": "Network and resource management utility for ControlMate PC",
+  "scripts": {
+    "build": "npm run build-css && npm run build-go",
+    "build-css": "tailwindcss -i ./src/static/styles.css -o ./build/static/styles.css --minify",
+    "build-go": "GOOS=linux GOARCH=arm64 go build -o ./release/control-mate-utils main.go",
+    "dev": "npm run setup && npm run dev:css",
+    "setup": "npm run clean && mkdir -p ./build/static && cp ./src/static/app.js ./build/static/",
+    "dev:css": "tailwindcss -i ./src/static/styles.css -o ./build/static/styles.css --watch",
+    "dev:go": "go run main.go",
+    "clean": "rm -rf ./build && rm -rf ./release",
+    "prebuild": "npm run setup",
+    "postbuild": "echo 'Build complete! Binary: ./release/control-mate-utils main.go'"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0",
+    "@tailwindcss/forms": "^0.5.7",
+    "@tailwindcss/typography": "^0.5.10",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32"
+  }
+}

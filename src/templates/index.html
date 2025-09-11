@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Mate Utils</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body class="bg-background text-foreground">
+    <div class="min-h-screen bg-background">
+        <!-- Sidebar -->
+        <div class="fixed inset-y-0 left-0 z-50 w-64 bg-sidebar-background border-r border-sidebar-border">
+            <div class="flex h-full flex-col">
+                <div class="flex h-16 items-center border-b border-sidebar-border px-6">
+                    <div class="flex items-center space-x-2">
+                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary">
+                            <i data-lucide="wifi" class="h-4 w-4 text-sidebar-primary-foreground"></i>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-semibold text-sidebar-foreground">ControlMate</span>
+                            <span class="text-xs text-sidebar-foreground/70">Network Utils</span>
+                        </div>
+                    </div>
+                </div>
+                <nav class="flex-1 space-y-1 p-4">
+                    <a href="#" class="sidebar-nav-item active" aria-current="page">
+                        <i data-lucide="network" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Interfaces</span>
+                    </a>
+                    <a href="#" class="sidebar-nav-item">
+                        <i data-lucide="wifi" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>WiFi Networks</span>
+                    </a>
+                    <a href="#" class="sidebar-nav-item">
+                        <i data-lucide="settings" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Settings</span>
+                    </a>
+                </nav>
+                <div class="border-t border-sidebar-border p-4">
+                    <button id="themeToggle" class="sidebar-nav-item w-full" aria-label="Toggle dark mode">
+                        <i data-lucide="moon" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Dark Mode</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="pl-64">
+            <!-- Header -->
+            <header class="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                <div class="container mx-auto px-6 py-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h1 class="text-3xl font-bold tracking-tight">Network Manager</h1>
+                            <p class="text-muted-foreground">Manage your network interfaces and WiFi connections</p>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="flex items-center space-x-2 rounded-lg bg-muted px-3 py-2">
+                                <div class="h-2 w-2 rounded-full bg-green-500"></div>
+                                <span class="text-sm font-medium">System Online</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <main class="container mx-auto px-6 py-8">
+                <!-- Network Interfaces Section -->
+                <section class="mb-12">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold tracking-tight">Network Interfaces</h2>
+                            <p class="text-muted-foreground">View and manage your network interfaces</p>
+                        </div>
+                        <button id="refreshInterfaces" class="btn-secondary" aria-label="Refresh network interfaces">
+                            <i data-lucide="refresh-cw" class="h-4 w-4 mr-2" aria-hidden="true"></i>
+                            Refresh
+                        </button>
+                    </div>
+                    
+                    <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                        <div class="p-6">
+                            <div id="interfacesLoading" class="hidden text-center py-12">
+                                <div class="flex flex-col items-center space-y-4">
+                                    <div class="relative">
+                                        <i data-lucide="loader-2" class="h-8 w-8 animate-spin text-primary"></i>
+                                    </div>
+                                    <div class="text-center">
+                                        <p class="text-sm font-medium">Loading interfaces...</p>
+                                        <p class="text-xs text-muted-foreground">Please wait while we fetch your network interfaces</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="interfacesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                <!-- Interfaces will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- WiFi Networks Section -->
+                <section class="mb-12 wifi-section">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold tracking-tight">WiFi Networks</h2>
+                            <p class="text-muted-foreground">Discover and connect to available WiFi networks</p>
+                        </div>
+                        <button id="scanWiFi" class="btn-primary" aria-label="Scan for WiFi networks">
+                            <i data-lucide="wifi" class="h-4 w-4 mr-2" aria-hidden="true"></i>
+                            Scan Networks
+                        </button>
+                    </div>
+                    
+                    <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                        <div class="p-6">
+                            <div id="wifiLoading" class="hidden text-center py-12">
+                                <div class="flex flex-col items-center space-y-4">
+                                    <div class="relative">
+                                        <i data-lucide="loader-2" class="h-8 w-8 animate-spin text-primary"></i>
+                                    </div>
+                                    <div class="text-center">
+                                        <p class="text-sm font-medium">Scanning for networks...</p>
+                                        <p class="text-xs text-muted-foreground">Please wait while we discover available WiFi networks</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="wifiList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                <!-- WiFi networks will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+        </main>
+    </div>
+
+    <!-- Connection Modal -->
+    <div id="connectionModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="fixed left-1/2 top-1/2 z-50 grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 gap-6 border bg-background p-6 shadow-xl rounded-xl animate-scale-in">
+            <div class="flex flex-col space-y-2 text-center">
+                <div class="flex items-center justify-center w-12 h-12 mx-auto rounded-full bg-primary/10">
+                    <i data-lucide="wifi" class="h-6 w-6 text-primary"></i>
+                </div>
+                <h3 id="modal-title" class="text-xl font-semibold leading-none tracking-tight">Connect to WiFi</h3>
+                <p class="text-sm text-muted-foreground" id="modalSSID">Enter password for the selected network</p>
+            </div>
+            <form id="connectionForm" class="space-y-6">
+                <div class="space-y-2">
+                    <label for="password" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Password</label>
+                    <input type="password" id="password" class="form-input" placeholder="Enter WiFi password" aria-describedby="password-help">
+                    <p id="password-help" class="text-xs text-muted-foreground">Enter the network password to connect</p>
+                </div>
+                <div class="space-y-2">
+                    <label for="security" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Security Type</label>
+                    <select id="security" class="form-select" aria-describedby="security-help">
+                        <option value="Open">Open</option>
+                        <option value="WEP">WEP</option>
+                        <option value="WPA/WPA2">WPA/WPA2</option>
+                        <option value="WPA2">WPA2</option>
+                    </select>
+                    <p id="security-help" class="text-xs text-muted-foreground">Select the security type for this network</p>
+                </div>
+                <div class="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-3">
+                    <button type="button" id="cancelConnection" class="btn-secondary mt-2 sm:mt-0">Cancel</button>
+                    <button type="submit" class="btn-primary">Connect</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

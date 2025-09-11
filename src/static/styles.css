@@ -1,0 +1,260 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Modern design tokens with improved color palette */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+    
+    /* Enhanced sidebar tokens */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222.2 84% 4.9%;
+    --sidebar-primary: 221.2 83.2% 53.3%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 222.2 47.4% 11.2%;
+    --sidebar-border: 214.3 31.8% 91.4%;
+    --sidebar-ring: 221.2 83.2% 53.3%;
+    
+    /* Chart colors for future data visualization */
+    --chart-1: 221.2 83.2% 53.3%;
+    --chart-2: 12 76% 61%;
+    --chart-3: 173 58% 39%;
+    --chart-4: 197 37% 24%;
+    --chart-5: 43 74% 66%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+    
+    --sidebar-background: 222.2 84% 4.9%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 217.2 91.2% 59.8%;
+    --sidebar-primary-foreground: 222.2 47.4% 11.2%;
+    --sidebar-accent: 217.2 32.6% 17.5%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-ring: 224.3 76.3% 48%;
+    
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+@layer components {
+  /* Network interface card styles */
+  .interface-card {
+    @apply rounded-lg border bg-card p-3 shadow-sm transition-all duration-200 hover:shadow-md hover:border-border/80;
+  }
+
+  .interface-header {
+    @apply flex items-center justify-between mb-2;
+  }
+
+  .interface-name {
+    @apply font-semibold text-card-foreground text-sm;
+  }
+
+  .interface-status {
+    @apply inline-flex items-center rounded-full px-2 py-1 text-xs font-medium;
+  }
+
+  .status-up {
+    @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400;
+  }
+
+  .status-down {
+    @apply bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400;
+  }
+
+  .interface-ips {
+    @apply text-sm text-muted-foreground;
+  }
+
+  /* WiFi network card styles */
+  .wifi-card {
+    @apply rounded-lg border bg-card p-3 shadow-sm cursor-pointer transition-all duration-200 hover:bg-accent hover:shadow-md hover:border-border/80;
+  }
+
+  .wifi-card.wifi-connected {
+    @apply border-primary/20 bg-primary/5 ring-1 ring-primary/10;
+  }
+
+  .wifi-header {
+    @apply flex items-center justify-between mb-2;
+  }
+
+  .wifi-ssid {
+    @apply font-semibold text-card-foreground text-sm;
+  }
+
+  .wifi-signal {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .wifi-security {
+    @apply inline-flex items-center rounded-full px-2 py-1 text-xs font-medium;
+  }
+
+  .security-open {
+    @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400;
+  }
+
+  .security-wep {
+    @apply bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400;
+  }
+
+  .security-wpa {
+    @apply bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400;
+  }
+
+  .connected-badge {
+    @apply inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary ring-1 ring-primary/20;
+  }
+
+  .connected-status {
+    @apply text-sm font-medium text-primary;
+  }
+
+  .connect-btn {
+    @apply transition-all duration-200 hover:shadow-sm hover:scale-105 active:scale-95;
+  }
+
+  /* Loading states */
+  .loading {
+    @apply opacity-50 pointer-events-none;
+  }
+
+  /* Enhanced button styles */
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 shadow-sm hover:shadow-md;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 shadow-sm hover:shadow-md;
+  }
+
+  /* Enhanced form styles */
+  .form-input {
+    @apply flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors;
+  }
+
+  .form-select {
+    @apply flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors;
+  }
+
+  /* Enhanced sidebar styles */
+  .sidebar-nav-item {
+    @apply flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors duration-200;
+  }
+
+  .sidebar-nav-item.active {
+    @apply bg-sidebar-accent text-sidebar-accent-foreground;
+  }
+
+  /* Enhanced notification styles */
+  .notification {
+    @apply fixed top-4 right-4 z-50 p-4 rounded-xl shadow-xl max-w-sm border transition-all duration-300;
+    max-width: min(24rem, calc(100vw - 2rem));
+    right: max(1rem, min(1rem, calc(100vw - 24rem - 1rem)));
+    transform: translateX(100%);
+  }
+  
+  .notification.animate-slide-in {
+    transform: translateX(0);
+  }
+  
+  .notification.animate-slide-out {
+    transform: translateX(100%);
+  }
+
+  .notification.success {
+    @apply bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800;
+  }
+
+  .notification.error {
+    @apply bg-red-50 text-red-800 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800;
+  }
+
+  .notification.info {
+    @apply bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800;
+  }
+}
+
+@layer utilities {
+  /* Custom utilities for better responsive design */
+  @media (max-width: 640px) {
+    .btn-primary,
+    .btn-secondary {
+      @apply h-9 px-3 text-xs;
+    }
+    
+    .form-input,
+    .form-select {
+      @apply h-10 text-sm;
+    }
+    
+    .sidebar-nav-item {
+      @apply px-2 py-1.5 text-xs;
+    }
+    
+    .notification {
+      @apply top-2 right-2 left-2 max-w-none;
+      right: 0.5rem;
+      left: 0.5rem;
+      max-width: none;
+    }
+  }
+}
