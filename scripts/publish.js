@@ -59,14 +59,21 @@ try {
     console.log(`📦 Version ${currentVersion} not found. Proceeding with release...`);
   }
 
-  // Build the application
-  console.log('🔨 Building application...');
+  // Build the application for both architectures
+  console.log('🔨 Building application for both architectures...');
   execSync('npm run build', { stdio: 'inherit' });
 
-  // Verify build output exists
-  const binaryPath = './release/control-mate-utils';
-  if (!fs.existsSync(binaryPath)) {
-    console.error('❌ Build failed: Binary not found at', binaryPath);
+  // Verify build outputs exist
+  const amd64BinaryPath = './release/cm-utils-linux-amd64';
+  const arm64BinaryPath = './release/cm-utils-linux-arm64';
+  
+  if (!fs.existsSync(amd64BinaryPath)) {
+    console.error('❌ Build failed: AMD64 binary not found at', amd64BinaryPath);
+    process.exit(1);
+  }
+  
+  if (!fs.existsSync(arm64BinaryPath)) {
+    console.error('❌ Build failed: ARM64 binary not found at', arm64BinaryPath);
     process.exit(1);
   }
 
@@ -76,11 +83,13 @@ try {
 Network and resource management utility for ControlMate PC.
 
 ### Installation
-1. Download the \`control-mate-utils\` binary from the release page
-2. Make it executable: chmod +x \`control-mate-utils\`
-3. Run: \`sudo ./control-mate-utils\`
+1. Download the appropriate binary for your architecture:
+   - \`cm-utils-linux-amd64\` for x86_64 systems
+   - \`cm-utils-linux-arm64\` for ARM64 systems
+2. Make it executable: chmod +x \`cm-utils-linux-*\`
+3. Run: \`sudo ./cm-utils-linux-*\`
 
-### Linux Installation
+### Linux Installation (Recommended)
 \`\`\`bash
 curl -sL https://raw.githubusercontent.com/controlx-io/control-mate-utils/refs/heads/main/scripts/install_to_linux.sh | sudo -E bash -
 \`\`\`
@@ -95,7 +104,7 @@ The application will start on port 8080.`;
   fs.writeFileSync(notesFile, releaseNotes);
   
   try {
-    execSync(`gh release create ${tagName} ${binaryPath} --title "ControlMate Utils ${currentVersion}" --notes-file ${notesFile} --latest`, { 
+    execSync(`gh release create ${tagName} ${amd64BinaryPath} ${arm64BinaryPath} --title "ControlMate Utils ${currentVersion}" --notes-file ${notesFile} --latest`, { 
       stdio: 'inherit' 
     });
   } finally {
