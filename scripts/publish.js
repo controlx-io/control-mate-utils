@@ -76,24 +76,29 @@ try {
 Network and resource management utility for ControlMate PC.
 
 ### Installation
-1. Download the \`control-mate-utils\` binary
-2. Make it executable: \`chmod +x control-mate-utils\`
-3. Run: \`./control-mate-utils\`
+1. Download the control-mate-utils binary
+2. Make it executable: chmod +x control-mate-utils
+3. Run: ./control-mate-utils
 
 The application will start on port 8080.`;
 
   // Create GitHub release
   console.log('🚀 Creating GitHub release...');
-  const releaseCommand = [
-    'gh release create',
-    tagName,
-    binaryPath,
-    '--title', `Control Mate Utils ${currentVersion}`,
-    '--notes', `"${releaseNotes}"`,
-    '--latest'
-  ].join(' ');
-
-  execSync(releaseCommand, { stdio: 'inherit' });
+  
+  // Write release notes to a temporary file to avoid shell escaping issues
+  const notesFile = './release-notes.tmp';
+  fs.writeFileSync(notesFile, releaseNotes);
+  
+  try {
+    execSync(`gh release create ${tagName} ${binaryPath} --title "Control Mate Utils ${currentVersion}" --notes-file ${notesFile} --latest`, { 
+      stdio: 'inherit' 
+    });
+  } finally {
+    // Clean up temporary file
+    if (fs.existsSync(notesFile)) {
+      fs.unlinkSync(notesFile);
+    }
+  }
 
   // Tag the current commit
   console.log('🏷️  Creating git tag...');
