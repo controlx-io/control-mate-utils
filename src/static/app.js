@@ -343,6 +343,20 @@ class NetworkManager {
         const loadingEl = document.getElementById('wifiLoading');
         const listEl = document.getElementById('wifiList');
 
+        // Check if nmcli is available before attempting to scan
+        if (!this.nmcliAvailable) {
+            listEl.innerHTML = `
+                <div class="text-center py-8 text-red-600">
+                    <i data-lucide="wifi-off" class="h-8 w-8 mx-auto mb-2"></i>
+                    <p>WiFi scanning not available</p>
+                    <p class="text-sm text-muted-foreground">nmcli is not installed or not available</p>
+                    <p class="text-xs text-muted-foreground mt-2">This feature requires NetworkManager (nmcli) on Linux systems</p>
+                </div>
+            `;
+            lucide.createIcons();
+            return;
+        }
+
         loadingEl.classList.remove('hidden');
         listEl.innerHTML = '';
 
@@ -354,10 +368,12 @@ class NetworkManager {
             ]);
 
             if (!currentResponse.ok) {
-                throw new Error(`HTTP error! status: ${currentResponse.status}`);
+                const errorText = await currentResponse.text();
+                throw new Error(errorText || `HTTP error! status: ${currentResponse.status}`);
             }
             if (!scanResponse.ok) {
-                throw new Error(`HTTP error! status: ${scanResponse.status}`);
+                const errorText = await scanResponse.text();
+                throw new Error(errorText || `HTTP error! status: ${scanResponse.status}`);
             }
 
             this.currentWiFi = await currentResponse.json();

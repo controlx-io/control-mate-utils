@@ -113,6 +113,11 @@ uninstall_app() {
         rm -rf "${APP_DIR}"
     fi
 
+    if [ -f "/etc/polkit-1/rules.d/50-allow-wifi-scan.rules" ]; then
+        info "Removing polkit rule file..."
+        rm -f "/etc/polkit-1/rules.d/50-allow-wifi-scan.rules"
+    fi
+
     if id "${INSTALL_USER}" &>/dev/null; then
         warn "The user '${INSTALL_USER}' exists."
         read -p "Do you want to remove this user? (y/N) " -n 1 -r REPLY < /dev/tty
@@ -288,6 +293,18 @@ EOF
 
 echo "${LATEST_VERSION}" > "${VERSION_FILE}"
 chown "${INSTALL_USER}:${INSTALL_USER}" "${VERSION_FILE}"
+
+info "Creating polkit rule for WiFi scan permissions..."
+POLKIT_RULE_FILE="/etc/polkit-1/rules.d/50-allow-wifi-scan.rules"
+cat << EOF > "${POLKIT_RULE_FILE}"
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.NetworkManager.wifi.scan" &&
+        subject.user == "${INSTALL_USER}") {
+        return polkit.Result.YES;
+    }
+});
+EOF
+chmod 644 "${POLKIT_RULE_FILE}"
 
 info "Reloading systemd, enabling and starting service..."
 systemctl daemon-reload
