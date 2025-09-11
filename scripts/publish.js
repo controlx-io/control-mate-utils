@@ -71,14 +71,19 @@ try {
   }
 
   // Create release notes
-  const releaseNotes = `## Control Mate Utils ${currentVersion}
+  const releaseNotes = `## ControlMate Utils ${currentVersion}
 
 Network and resource management utility for ControlMate PC.
 
 ### Installation
-1. Download the control-mate-utils binary
-2. Make it executable: chmod +x control-mate-utils
-3. Run: ./control-mate-utils
+1. Download the \`control-mate-utils\` binary from the release page
+2. Make it executable: chmod +x \`control-mate-utils\`
+3. Run: \`sudo ./control-mate-utils\`
+
+### Linux Installation
+\`\`\`bash
+curl -sL https://raw.githubusercontent.com/controlx-io/control-mate-utils/refs/heads/main/scripts/install_to_linux.sh | sudo -E bash -
+\`\`\`
 
 The application will start on port 8080.`;
 
@@ -90,7 +95,7 @@ The application will start on port 8080.`;
   fs.writeFileSync(notesFile, releaseNotes);
   
   try {
-    execSync(`gh release create ${tagName} ${binaryPath} --title "Control Mate Utils ${currentVersion}" --notes-file ${notesFile} --latest`, { 
+    execSync(`gh release create ${tagName} ${binaryPath} --title "ControlMate Utils ${currentVersion}" --notes-file ${notesFile} --latest`, { 
       stdio: 'inherit' 
     });
   } finally {
@@ -113,8 +118,10 @@ The application will start on port 8080.`;
   // Push the tag to remote
   console.log('📤 Pushing tag to remote...');
   try {
-    execSync(`git push origin ${tagName}`, { stdio: 'inherit' });
-    console.log(`✅ Pushed tag ${tagName} to remote`);
+    // Get the remote name (usually 'origin' or 'main')
+    const remoteName = execSync('git remote', { encoding: 'utf8' }).trim().split('\n')[0];
+    execSync(`git push ${remoteName} ${tagName}`, { stdio: 'inherit' });
+    console.log(`✅ Pushed tag ${tagName} to remote (${remoteName})`);
   } catch (error) {
     console.error('❌ Failed to push tag:', error.message);
     process.exit(1);
