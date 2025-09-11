@@ -9,9 +9,25 @@ const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const currentVersion = packageJson.version;
 const tagName = `v${currentVersion}`;
 
-console.log(`Checking if version ${currentVersion} is already released...`);
+  console.log(`Checking if version ${currentVersion} is already released...`);
 
 try {
+  // Check for uncommitted changes
+  console.log('🔍 Checking for uncommitted changes...');
+  try {
+    const gitStatus = execSync('git status --porcelain', { encoding: 'utf8' });
+    if (gitStatus.trim()) {
+      console.error('❌ There are uncommitted changes. Please commit all changes before releasing.');
+      console.error('Uncommitted files:');
+      console.error(gitStatus);
+      process.exit(1);
+    }
+    console.log('✅ No uncommitted changes found.');
+  } catch (error) {
+    console.error('❌ Failed to check git status:', error.message);
+    process.exit(1);
+  }
+
   // Check if GitHub CLI is installed
   try {
     execSync('gh --version', { stdio: 'ignore' });
@@ -78,6 +94,26 @@ The application will start on port 8080.`;
   ].join(' ');
 
   execSync(releaseCommand, { stdio: 'inherit' });
+
+  // Tag the current commit
+  console.log('🏷️  Creating git tag...');
+  try {
+    execSync(`git tag ${tagName}`, { stdio: 'inherit' });
+    console.log(`✅ Created tag ${tagName}`);
+  } catch (error) {
+    console.error('❌ Failed to create git tag:', error.message);
+    process.exit(1);
+  }
+
+  // Push the tag to remote
+  console.log('📤 Pushing tag to remote...');
+  try {
+    execSync(`git push origin ${tagName}`, { stdio: 'inherit' });
+    console.log(`✅ Pushed tag ${tagName} to remote`);
+  } catch (error) {
+    console.error('❌ Failed to push tag:', error.message);
+    process.exit(1);
+  }
 
   console.log(`✅ Successfully released version ${currentVersion}!`);
   console.log(`🔗 View release: https://github.com/controlx-io/control-mate-utils/releases/tag/${tagName}`);
