@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -205,6 +206,16 @@ func getNetworkInterfaces() ([]NetworkInterface, error) {
 }
 
 func scanWiFiNetworks() ([]WiFiNetwork, error) {
+	// First, trigger a rescan to refresh the WiFi network list
+	rescanCmd := exec.Command("nmcli", "device", "wifi", "rescan")
+	if err := rescanCmd.Run(); err != nil {
+		return nil, fmt.Errorf("failed to rescan WiFi networks: %v", err)
+	}
+
+	// Wait 5 seconds for the rescan to complete
+	time.Sleep(5 * time.Second)
+
+	// Now get the updated list of WiFi networks
 	cmd := exec.Command("nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list")
 	output, err := cmd.Output()
 	if err != nil {
