@@ -6,7 +6,24 @@ class NetworkManager {
         this.isDarkMode = localStorage.getItem('darkMode') === 'true';
         this.initializeEventListeners();
         this.initializeTheme();
+        this.loadVersion();
         this.checkNmcliStatus();
+    }
+
+    async loadVersion() {
+        try {
+            const response = await fetch('/api/version');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            const versionDisplay = document.getElementById('versionDisplay');
+            if (versionDisplay) {
+                versionDisplay.textContent = `v${data.version}`;
+            }
+        } catch (error) {
+            console.error('Error loading version:', error);
+        }
     }
 
     async checkNmcliStatus() {

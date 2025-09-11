@@ -50,6 +50,7 @@ type ConnectionRequest struct {
 type App struct {
 	templates      *template.Template
 	nmcliAvailable bool
+	version        string
 }
 
 var nmcliAvailable bool
@@ -60,10 +61,20 @@ func checkNmcliAvailable() bool {
 	return err == nil
 }
 
+func readVersion() string {
+	data, err := staticFS.ReadFile("build/static/version.txt")
+	if err != nil {
+		return "unknown"
+	}
+
+	return strings.TrimSpace(string(data))
+}
+
 func NewApp() *App {
 	templates := template.Must(template.ParseFS(templateFS, "src/templates/*.html"))
 	nmcliAvailable = checkNmcliAvailable()
-	return &App{templates: templates, nmcliAvailable: nmcliAvailable}
+	version := readVersion()
+	return &App{templates: templates, nmcliAvailable: nmcliAvailable, version: version}
 }
 
 func (app *App) homeHandler(w http.ResponseWriter, r *http.Request) {
@@ -138,6 +149,11 @@ func (app *App) getCurrentWiFiHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(currentWiFi)
+}
+
+func (app *App) getVersionHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"version": app.version})
 }
 
 func getNetworkInterfaces() ([]NetworkInterface, error) {
@@ -333,12 +349,13 @@ func main() {
 
 	// Routes
 	r.HandleFunc("/", app.homeHandler).Methods("GET")
+	r.HandleFunc("/api/version", app.getVersionHandler).Methods("GET")
 	r.HandleFunc("/api/nmcli/status", app.getNmcliStatusHandler).Methods("GET")
 	r.HandleFunc("/api/interfaces", app.getInterfacesHandler).Methods("GET")
 	r.HandleFunc("/api/wifi/scan", app.getWiFiNetworksHandler).Methods("GET")
 	r.HandleFunc("/api/wifi/current", app.getCurrentWiFiHandler).Methods("GET")
 	r.HandleFunc("/api/wifi/connect", app.connectWiFiHandler).Methods("POST")
 
-	fmt.Println("Control Mate Utils starting on :8080")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	fmt.Println("ControlMate Utils starting on :9080")
+	log.Fatal(http.ListenAndServe(":9080", r))
 }
