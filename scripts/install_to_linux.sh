@@ -113,9 +113,9 @@ uninstall_app() {
         rm -rf "${APP_DIR}"
     fi
 
-    if [ -f "/etc/polkit-1/rules.d/50-allow-wifi-scan.rules" ]; then
+    if [ -f "/etc/polkit-1/rules.d/55-allow-full-network-management.rules" ]; then
         info "Removing polkit rule file..."
-        rm -f "/etc/polkit-1/rules.d/50-allow-wifi-scan.rules"
+        rm -f "/etc/polkit-1/rules.d/55-allow-full-network-management.rules"
     fi
 
     if id "${INSTALL_USER}" &>/dev/null; then
@@ -294,11 +294,14 @@ EOF
 echo "${LATEST_VERSION}" > "${VERSION_FILE}"
 chown "${INSTALL_USER}:${INSTALL_USER}" "${VERSION_FILE}"
 
-info "Creating polkit rule for WiFi scan permissions..."
-POLKIT_RULE_FILE="/etc/polkit-1/rules.d/50-allow-wifi-scan.rules"
+info "Creating polkit rule for full network management permissions..."
+POLKIT_RULE_FILE="/etc/polkit-1/rules.d/55-allow-full-network-management.rules"
 cat << EOF > "${POLKIT_RULE_FILE}"
+// Allow user '${INSTALL_USER}' to fully manage system network connections
 polkit.addRule(function(action, subject) {
-    if (action.id == "org.freedesktop.NetworkManager.wifi.scan" &&
+    if ((action.id == "org.freedesktop.NetworkManager.wifi.scan" ||
+         action.id == "org.freedesktop.NetworkManager.network-control" ||
+         action.id == "org.freedesktop.NetworkManager.settings.modify.system") &&
         subject.user == "${INSTALL_USER}") {
         return polkit.Result.YES;
     }

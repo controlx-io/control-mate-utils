@@ -99,56 +99,66 @@ func (app *App) getInterfacesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) getWiFiNetworksHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	if !app.nmcliAvailable {
-		http.Error(w, "nmcli is not installed or not available", http.StatusServiceUnavailable)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{"error": "nmcli is not installed or not available"})
 		return
 	}
 
 	networks, err := scanWiFiNetworks()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(networks)
 }
 
 func (app *App) connectWiFiHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	if !app.nmcliAvailable {
-		http.Error(w, "nmcli is not installed or not available", http.StatusServiceUnavailable)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{"error": "nmcli is not installed or not available"})
 		return
 	}
 
 	var req ConnectionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON"})
 		return
 	}
 
 	err := connectToWiFi(req.SSID, req.Password, req.Security)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
 func (app *App) getCurrentWiFiHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	if !app.nmcliAvailable {
-		http.Error(w, "nmcli is not installed or not available", http.StatusServiceUnavailable)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{"error": "nmcli is not installed or not available"})
 		return
 	}
 
 	currentWiFi, err := getCurrentWiFi()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(currentWiFi)
 }
 

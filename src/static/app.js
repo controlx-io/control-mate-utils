@@ -592,8 +592,20 @@ class NetworkManager {
             });
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                let errorMessage = `HTTP error! status: ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorMessage;
+                } catch {
+                    // If response is not JSON, try to get text content
+                    try {
+                        const errorText = await response.text();
+                        errorMessage = errorText || errorMessage;
+                    } catch {
+                        // Keep the default error message
+                    }
+                }
+                throw new Error(errorMessage);
             }
 
             const result = await response.json();
