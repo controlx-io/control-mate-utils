@@ -12,7 +12,7 @@
     "dev:go": "npm run build-css && go run main.go",
     "clean": "rm -rf ./build && rm -rf ./release",
     "prebuild": "npm run setup",
-    "postbuild": "echo 'Build complete! Binary: ./release/control-mate-utils main.go'",
+    "postbuild": "echo 'Build complete! Binary: ./release/control-mate-utils'",
     "publish": "node scripts/publish.js"
   },
   "devDependencies": {
