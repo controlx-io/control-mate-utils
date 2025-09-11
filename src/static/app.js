@@ -382,7 +382,11 @@ class NetworkManager {
     renderWiFiNetworks(networks) {
         const listEl = document.getElementById('wifiList');
         
-        if (networks.length === 0) {
+        if (!networks || networks.length === 0) {
+            const message = !networks ? 
+                "No networks found. Make sure the WiFi adapter is connected and there are available networks" :
+                "No WiFi networks found. Make sure your WiFi adapter is enabled and try scanning again";
+            
             listEl.innerHTML = `
                 <div class="text-center py-12 text-muted-foreground">
                     <div class="flex flex-col items-center space-y-4">
@@ -391,7 +395,7 @@ class NetworkManager {
                         </div>
                         <div class="text-center">
                             <p class="text-lg font-medium">No WiFi networks found</p>
-                            <p class="text-sm">Make sure your WiFi adapter is enabled and try scanning again</p>
+                            <p class="text-sm">${message}</p>
                         </div>
                     </div>
                 </div>
