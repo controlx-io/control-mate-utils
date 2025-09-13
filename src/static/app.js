@@ -86,6 +86,9 @@ class NetworkManager {
     }
 
     initializeEventListeners() {
+        // Mobile navigation
+        this.initializeMobileNavigation();
+
         // Refresh interfaces button
         document.getElementById('refreshInterfaces').addEventListener('click', () => {
             this.loadInterfaces();
@@ -120,6 +123,74 @@ class NetworkManager {
                 this.hideConnectionModal();
             }
         });
+    }
+
+    initializeMobileNavigation() {
+        const openSidebar = document.getElementById('openSidebar');
+        const closeSidebar = document.getElementById('closeSidebar');
+        const sidebar = document.getElementById('sidebar');
+        const mobileOverlay = document.getElementById('mobileOverlay');
+
+        if (openSidebar) {
+            openSidebar.addEventListener('click', () => {
+                this.openSidebar();
+            });
+        }
+
+        if (closeSidebar) {
+            closeSidebar.addEventListener('click', () => {
+                this.closeSidebar();
+            });
+        }
+
+        if (mobileOverlay) {
+            mobileOverlay.addEventListener('click', () => {
+                this.closeSidebar();
+            });
+        }
+
+        // Close sidebar when clicking on navigation links (mobile only)
+        const navLinks = document.querySelectorAll('.sidebar-nav-item');
+        navLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth < 1024) { // lg breakpoint
+                    this.closeSidebar();
+                }
+            });
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 1024) {
+                this.closeSidebar();
+            }
+        });
+    }
+
+    openSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const mobileOverlay = document.getElementById('mobileOverlay');
+        
+        if (sidebar) {
+            sidebar.classList.remove('-translate-x-full');
+        }
+        if (mobileOverlay) {
+            mobileOverlay.classList.remove('hidden');
+        }
+        document.body.style.overflow = 'hidden';
+    }
+
+    closeSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const mobileOverlay = document.getElementById('mobileOverlay');
+        
+        if (sidebar) {
+            sidebar.classList.add('-translate-x-full');
+        }
+        if (mobileOverlay) {
+            mobileOverlay.classList.add('hidden');
+        }
+        document.body.style.overflow = '';
     }
 
     initializeTheme() {

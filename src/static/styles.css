@@ -234,6 +234,22 @@
 }
 
 @layer utilities {
+  /* Mobile navigation animations */
+  .animate-scale-in {
+    animation: scale-in 0.2s ease-out;
+  }
+  
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  
   /* Custom utilities for better responsive design */
   @media (max-width: 640px) {
     .btn-primary,
@@ -255,6 +271,30 @@
       right: 0.5rem;
       left: 0.5rem;
       max-width: none;
+    }
+    
+    /* Mobile-specific card adjustments */
+    .interface-card,
+    .wifi-card {
+      @apply p-2;
+    }
+    
+    .interface-name,
+    .wifi-ssid {
+      @apply text-xs;
+    }
+    
+    .interface-ips,
+    .wifi-signal {
+      @apply text-xs;
+    }
+  }
+  
+  /* Tablet adjustments */
+  @media (min-width: 641px) and (max-width: 1024px) {
+    .interface-card,
+    .wifi-card {
+      @apply p-2.5;
     }
   }
 }

@@ -1,4 +1,4 @@
-# Control Mate Utils
+# ControlMate Utils
 
 A Go-based utility application for headless Debian systems to manage network interfaces and WiFi connections through a web interface.
 
