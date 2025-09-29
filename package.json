@@ -1,6 +1,6 @@
 {
   "name": "control-mate-utils",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Network and resource management utility for ControlMate PC",
   "scripts": {
     "build": "npm run build-css && npm run build-go",
