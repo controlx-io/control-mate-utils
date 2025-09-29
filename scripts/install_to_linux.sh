@@ -118,6 +118,11 @@ uninstall_app() {
         rm -f "/etc/polkit-1/rules.d/55-allow-full-network-management.rules"
     fi
 
+    if [ -f "/etc/sudoers.d/99-cm-utils-reboot" ]; then
+        info "Removing sudoers rule file..."
+        rm -f "/etc/sudoers.d/99-cm-utils-reboot"
+    fi
+
     if id "${INSTALL_USER}" &>/dev/null; then
         warn "The user '${INSTALL_USER}' exists."
         read -p "Do you want to remove this user? (y/N) " -n 1 -r REPLY < /dev/tty
@@ -308,6 +313,13 @@ polkit.addRule(function(action, subject) {
 });
 EOF
 chmod 644 "${POLKIT_RULE_FILE}"
+
+info "Adding sudo rule for passwordless reboot..."
+SUDOERS_FILE="/etc/sudoers.d/99-cm-utils-reboot"
+cat << EOF > "${SUDOERS_FILE}"
+%admin ALL=NOPASSWD: /sbin/reboot
+EOF
+chmod 440 "${SUDOERS_FILE}"
 
 info "Reloading systemd, enabling and starting service..."
 systemctl daemon-reload
