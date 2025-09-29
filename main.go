@@ -67,6 +67,13 @@ type SystemHealth struct {
 	LastCheck    string `json:"last_check"`
 }
 
+type TemplateData struct {
+	Title       string
+	ActiveNav   string
+	Version     string
+	PageContent string
+}
+
 type App struct {
 	templates      *template.Template
 	nmcliAvailable bool
@@ -104,7 +111,13 @@ func NewApp() *App {
 }
 
 func (app *App) homeHandler(w http.ResponseWriter, r *http.Request) {
-	app.templates.ExecuteTemplate(w, "index.html", nil)
+	data := TemplateData{
+		Title:       "ControlMate Utils",
+		ActiveNav:   "network",
+		Version:     app.version,
+		PageContent: "network",
+	}
+	app.templates.ExecuteTemplate(w, "index.html", data)
 }
 
 func (app *App) getNmcliStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -219,11 +232,23 @@ func (app *App) getSystemHealthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) processesHandler(w http.ResponseWriter, r *http.Request) {
-	app.templates.ExecuteTemplate(w, "processes.html", nil)
+	data := TemplateData{
+		Title:       "Processes - ControlMate Utils",
+		ActiveNav:   "processes",
+		Version:     app.version,
+		PageContent: "processes",
+	}
+	app.templates.ExecuteTemplate(w, "processes.html", data)
 }
 
 func (app *App) systemHandler(w http.ResponseWriter, r *http.Request) {
-	app.templates.ExecuteTemplate(w, "system.html", nil)
+	data := TemplateData{
+		Title:       "System - ControlMate Utils",
+		ActiveNav:   "system",
+		Version:     app.version,
+		PageContent: "system",
+	}
+	app.templates.ExecuteTemplate(w, "system.html", data)
 }
 
 func (app *App) getProcessesHandler(w http.ResponseWriter, r *http.Request) {

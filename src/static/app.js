@@ -9,7 +9,7 @@ class NetworkManager {
         this.initializeEventListeners();
         this.initializeTheme();
         this.loadVersion();
-        this.loadInterfaces(); // Always refresh network interfaces on page load
+        this.loadInterfaces(); // Only loads if on network page
         this.checkNmcliStatus();
         this.startHealthMonitoring();
     }
@@ -162,15 +162,21 @@ class NetworkManager {
         // Mobile navigation
         this.initializeMobileNavigation();
 
-        // Refresh interfaces button
-        document.getElementById('refreshInterfaces').addEventListener('click', () => {
-            this.loadInterfaces();
-        });
+        // Refresh interfaces button (only on network page)
+        const refreshInterfaces = document.getElementById('refreshInterfaces');
+        if (refreshInterfaces) {
+            refreshInterfaces.addEventListener('click', () => {
+                this.loadInterfaces();
+            });
+        }
 
-        // Scan WiFi button
-        document.getElementById('scanWiFi').addEventListener('click', () => {
-            this.scanWiFiNetworks();
-        });
+        // Scan WiFi button (only on network page)
+        const scanWiFi = document.getElementById('scanWiFi');
+        if (scanWiFi) {
+            scanWiFi.addEventListener('click', () => {
+                this.scanWiFiNetworks();
+            });
+        }
 
         // Theme toggle button
         const themeToggle = document.getElementById('themeToggle');
@@ -180,22 +186,31 @@ class NetworkManager {
             });
         }
 
-        // Connection modal events
-        document.getElementById('cancelConnection').addEventListener('click', () => {
-            this.hideConnectionModal();
-        });
+        // Connection modal events (only on network page)
+        const cancelConnection = document.getElementById('cancelConnection');
+        if (cancelConnection) {
+            cancelConnection.addEventListener('click', () => {
+                this.hideConnectionModal();
+            });
+        }
 
-        document.getElementById('connectionForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.connectToWiFi();
-        });
+        const connectionForm = document.getElementById('connectionForm');
+        if (connectionForm) {
+            connectionForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.connectToWiFi();
+            });
+        }
 
         // Close modal on background click
-        document.getElementById('connectionModal').addEventListener('click', (e) => {
-            if (e.target === e.currentTarget) {
-                this.hideConnectionModal();
-            }
-        });
+        const connectionModal = document.getElementById('connectionModal');
+        if (connectionModal) {
+            connectionModal.addEventListener('click', (e) => {
+                if (e.target === e.currentTarget) {
+                    this.hideConnectionModal();
+                }
+            });
+        }
     }
 
     initializeMobileNavigation() {
@@ -330,6 +345,11 @@ class NetworkManager {
     async loadInterfaces() {
         const loadingEl = document.getElementById('interfacesLoading');
         const listEl = document.getElementById('interfacesList');
+
+        // Only proceed if we're on the network page
+        if (!loadingEl || !listEl) {
+            return;
+        }
 
         loadingEl.classList.remove('hidden');
         listEl.innerHTML = '';
@@ -486,6 +506,11 @@ class NetworkManager {
     async scanWiFiNetworks() {
         const loadingEl = document.getElementById('wifiLoading');
         const listEl = document.getElementById('wifiList');
+
+        // Only proceed if we're on the network page
+        if (!loadingEl || !listEl) {
+            return;
+        }
 
         // Check if nmcli is available before attempting to scan
         if (!this.nmcliAvailable) {
