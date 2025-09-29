@@ -118,6 +118,11 @@ uninstall_app() {
         rm -f "/etc/polkit-1/rules.d/55-allow-full-network-management.rules"
     fi
 
+    if [ -f "/etc/polkit-1/rules.d/56-allow-power-management.rules" ]; then
+        info "Removing polkit power management rule file..."
+        rm -f "/etc/polkit-1/rules.d/56-allow-power-management.rules"
+    fi
+
     if [ -f "/etc/sudoers.d/99-cm-utils-reboot" ]; then
         info "Removing sudoers rule file..."
         rm -f "/etc/sudoers.d/99-cm-utils-reboot"
@@ -314,10 +319,26 @@ polkit.addRule(function(action, subject) {
 EOF
 chmod 644 "${POLKIT_RULE_FILE}"
 
-info "Adding sudo rule for passwordless reboot..."
+info "Creating polkit rule for system power management..."
+POLKIT_POWER_RULE_FILE="/etc/polkit-1/rules.d/56-allow-power-management.rules"
+cat << EOF > "${POLKIT_POWER_RULE_FILE}"
+// Allow user '${INSTALL_USER}' to manage system power (reboot, shutdown, etc.)
+polkit.addRule(function(action, subject) {
+    if ((action.id == "org.freedesktop.login1.reboot" ||
+         action.id == "org.freedesktop.login1.reboot-multiple-sessions" ||
+         action.id == "org.freedesktop.login1.power-off" ||
+         action.id == "org.freedesktop.login1.power-off-multiple-sessions") &&
+        subject.user == "${INSTALL_USER}") {
+        return polkit.Result.YES;
+    }
+});
+EOF
+chmod 644 "${POLKIT_POWER_RULE_FILE}"
+
+info "Adding sudo rule for direct binary power management..."
 SUDOERS_FILE="/etc/sudoers.d/99-cm-utils-reboot"
 cat << EOF > "${SUDOERS_FILE}"
-${INSTALL_USER} ALL=NOPASSWD: /bin/systemctl reboot, /sbin/reboot, /sbin/shutdown
+${INSTALL_USER} ALL=NOPASSWD: /sbin/reboot, /sbin/shutdown
 EOF
 chmod 440 "${SUDOERS_FILE}"
 

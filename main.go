@@ -279,7 +279,7 @@ func (app *App) rebootHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Reboot requested on %s system", runtime.GOOS)
 
 	// Use systemctl if available (systemd systems)
-	cmd := exec.Command("systemctl", "reboot")
+	cmd := exec.Command("systemctl", "reboot", "-i")
 	if err := cmd.Run(); err != nil {
 		// Fallback to reboot command
 		cmd = exec.Command("reboot")
