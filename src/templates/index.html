@@ -30,17 +30,17 @@
                     </button>
                 </div>
                 <nav class="flex-1 space-y-1 p-4">
-                    <a href="#" class="sidebar-nav-item active" aria-current="page">
+                    <a href="/" class="sidebar-nav-item active" aria-current="page">
                         <i data-lucide="network" class="h-4 w-4" aria-hidden="true"></i>
-                        <span>Interfaces</span>
+                        <span>Network Manager</span>
                     </a>
-                    <a href="#" class="sidebar-nav-item">
-                        <i data-lucide="wifi" class="h-4 w-4" aria-hidden="true"></i>
-                        <span>WiFi Networks</span>
+                    <a href="/processes" class="sidebar-nav-item">
+                        <i data-lucide="activity" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Processes</span>
                     </a>
-                    <a href="#" class="sidebar-nav-item">
+                    <a href="/system" class="sidebar-nav-item">
                         <i data-lucide="settings" class="h-4 w-4" aria-hidden="true"></i>
-                        <span>Settings</span>
+                        <span>System</span>
                     </a>
                 </nav>
                 <div class="border-t border-sidebar-border p-4">
@@ -71,10 +71,10 @@
                             </div>
                         </div>
                         <div class="flex items-center space-x-2 lg:space-x-4">
-                            <div class="flex items-center space-x-2 rounded-lg bg-muted px-2 lg:px-3 py-2">
-                                <div class="h-2 w-2 rounded-full bg-green-500"></div>
-                                <span class="text-xs lg:text-sm font-medium hidden sm:inline">System Online</span>
-                                <span class="text-xs lg:text-sm font-medium sm:hidden">Online</span>
+                            <div class="flex items-center space-x-2 rounded-lg bg-muted px-2 lg:px-3 py-2 system-status-indicator">
+                                <div class="h-2 w-2 rounded-full bg-green-500 system-status-dot"></div>
+                                <span class="text-xs lg:text-sm font-medium hidden sm:inline system-status-text">System Online</span>
+                                <span class="text-xs lg:text-sm font-medium sm:hidden system-status-text-mobile">Online</span>
                             </div>
                         </div>
                     </div>

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System - ControlMate Utils</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body class="bg-background text-foreground">
+    <div class="min-h-screen bg-background">
+        <!-- Mobile overlay -->
+        <div id="mobileOverlay" class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden hidden"></div>
+        
+        <!-- Sidebar -->
+        <div id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-sidebar-background border-r border-sidebar-border transform -translate-x-full transition-transform duration-300 ease-in-out lg:translate-x-0">
+            <div class="flex h-full flex-col">
+                <div class="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
+                    <div class="flex items-center space-x-2">
+                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary">
+                            <i data-lucide="settings" class="h-4 w-4 text-sidebar-primary-foreground"></i>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-semibold text-sidebar-foreground">ControlMate</span>
+                            <span class="text-xs text-sidebar-foreground/70">System Utils</span>
+                        </div>
+                    </div>
+                    <button id="closeSidebar" class="lg:hidden p-1 rounded-md hover:bg-sidebar-accent" aria-label="Close sidebar">
+                        <i data-lucide="x" class="h-5 w-5 text-sidebar-foreground"></i>
+                    </button>
+                </div>
+                <nav class="flex-1 space-y-1 p-4">
+                    <a href="/" class="sidebar-nav-item">
+                        <i data-lucide="network" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Network Manager</span>
+                    </a>
+                    <a href="/processes" class="sidebar-nav-item">
+                        <i data-lucide="activity" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Processes</span>
+                    </a>
+                    <a href="/system" class="sidebar-nav-item active" aria-current="page">
+                        <i data-lucide="settings" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>System</span>
+                    </a>
+                </nav>
+                <div class="border-t border-sidebar-border p-4">
+                    <button id="themeToggle" class="sidebar-nav-item w-full" aria-label="Toggle dark mode">
+                        <i data-lucide="moon" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Dark Mode</span>
+                    </button>
+                    <div class="mt-3 text-center">
+                        <span id="versionDisplay" class="text-xs text-sidebar-foreground/50">v1.0.1</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="lg:pl-64">
+            <!-- Header -->
+            <header class="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                <div class="container mx-auto px-4 lg:px-6 py-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-4">
+                            <button id="openSidebar" class="lg:hidden p-2 rounded-md hover:bg-accent" aria-label="Open sidebar">
+                                <i data-lucide="menu" class="h-5 w-5"></i>
+                            </button>
+                            <div>
+                                <h1 class="text-2xl lg:text-3xl font-bold tracking-tight">System</h1>
+                                <p class="text-sm lg:text-base text-muted-foreground hidden sm:block">System information and utilities</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2 lg:space-x-4">
+                            <div class="flex items-center space-x-2 rounded-lg bg-muted px-2 lg:px-3 py-2 system-status-indicator">
+                                <div class="h-2 w-2 rounded-full bg-green-500 system-status-dot"></div>
+                                <span class="text-xs lg:text-sm font-medium hidden sm:inline system-status-text">System Online</span>
+                                <span class="text-xs lg:text-sm font-medium sm:hidden system-status-text-mobile">Online</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <main class="container mx-auto px-4 lg:px-6 py-4">
+                <!-- System Information Section -->
+                <section class="mb-8">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 space-y-2 sm:space-y-0">
+                        <div>
+                            <h2 class="text-lg font-bold tracking-tight">System Information</h2>
+                            <p class="text-sm text-muted-foreground">Overview of system status and details</p>
+                        </div>
+                        <button id="refreshSystem" class="btn-secondary w-full sm:w-auto" aria-label="Refresh system information">
+                            <i data-lucide="refresh-cw" class="h-4 w-4 mr-2" aria-hidden="true"></i>
+                            Refresh
+                        </button>
+                    </div>
+                    
+                    <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                        <div class="p-4">
+                            <div id="systemLoading" class="hidden text-center py-8">
+                                <div class="flex flex-col items-center space-y-3">
+                                    <div class="relative">
+                                        <i data-lucide="loader-2" class="h-6 w-6 animate-spin text-primary"></i>
+                                    </div>
+                                    <div class="text-center">
+                                        <p class="text-sm font-medium">Loading system information...</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="systemInfo" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <!-- System Status Card -->
+                                <div class="rounded-lg border bg-card text-card-foreground shadow-sm p-4">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/20">
+                                            <i data-lucide="activity" class="h-5 w-5 text-green-600 dark:text-green-400"></i>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <h3 class="text-sm font-medium">System Status</h3>
+                                            <p id="systemStatus" class="text-xs text-muted-foreground">Loading...</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Uptime Card -->
+                                <div class="rounded-lg border bg-card text-card-foreground shadow-sm p-4">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/20">
+                                            <i data-lucide="clock" class="h-5 w-5 text-blue-600 dark:text-blue-400"></i>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <h3 class="text-sm font-medium">Uptime</h3>
+                                            <p id="systemUptime" class="text-xs text-muted-foreground">Loading...</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Network Status Card -->
+                                <div class="rounded-lg border bg-card text-card-foreground shadow-sm p-4">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/20">
+                                            <i data-lucide="wifi" class="h-5 w-5 text-purple-600 dark:text-purple-400"></i>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <h3 class="text-sm font-medium">Network</h3>
+                                            <p id="networkStatus" class="text-xs text-muted-foreground">Loading...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- System Actions Section -->
+                            <div class="mt-6">
+                                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 space-y-2 sm:space-y-0">
+                                    <div>
+                                        <h2 class="text-lg font-bold tracking-tight">System Actions</h2>
+                                        <p class="text-sm text-muted-foreground">Manage system operations</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                                    <div class="p-4">
+                                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+                                            <div class="flex items-center space-x-3">
+                                                <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/20">
+                                                    <i data-lucide="power" class="h-5 w-5 text-red-600 dark:text-red-400"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 class="text-sm font-medium">System Reboot</h3>
+                                                    <p class="text-xs text-muted-foreground">Restart the system</p>
+                                                </div>
+                                            </div>
+                                            <button id="rebootButton" class="btn-danger w-full sm:w-auto" aria-label="Reboot system">
+                                                <i data-lucide="power" class="h-4 w-4 mr-2" aria-hidden="true"></i>
+                                                Reboot System
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        lucide.createIcons();
+        
+        // System page specific functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const refreshBtn = document.getElementById('refreshSystem');
+            const systemInfo = document.getElementById('systemInfo');
+            const systemLoading = document.getElementById('systemLoading');
+            const rebootBtn = document.getElementById('rebootButton');
+            
+            // Refresh button
+            refreshBtn.addEventListener('click', function() {
+                loadSystemInfo();
+            });
+            
+            // Reboot button
+            rebootBtn.addEventListener('click', function() {
+                showRebootConfirmation();
+            });
+            
+            function loadSystemInfo() {
+                systemLoading.classList.remove('hidden');
+                
+                // Load system health information
+                fetch('/api/health')
+                    .then(response => response.json())
+                    .then(data => {
+                        updateSystemInfo(data);
+                        systemLoading.classList.add('hidden');
+                    })
+                    .catch(error => {
+                        console.error('Error loading system info:', error);
+                        systemLoading.classList.add('hidden');
+                        showSystemError();
+                    });
+            }
+            
+            function updateSystemInfo(health) {
+                const systemStatus = document.getElementById('systemStatus');
+                const systemUptime = document.getElementById('systemUptime');
+                const networkStatus = document.getElementById('networkStatus');
+                
+                if (systemStatus) {
+                    systemStatus.textContent = health.status || 'Unknown';
+                    systemStatus.className = `text-xs ${getStatusColor(health.status)}`;
+                }
+                
+                if (systemUptime) {
+                    systemUptime.textContent = health.uptime || 'Unknown';
+                }
+                
+                if (networkStatus) {
+                    networkStatus.textContent = health.network_check ? 'Connected' : 'Disconnected';
+                    networkStatus.className = `text-xs ${health.network_check ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`;
+                }
+            }
+            
+            function getStatusColor(status) {
+                switch (status) {
+                    case 'online':
+                        return 'text-green-600 dark:text-green-400';
+                    case 'degraded':
+                        return 'text-yellow-600 dark:text-yellow-400';
+                    case 'offline':
+                    default:
+                        return 'text-red-600 dark:text-red-400';
+                }
+            }
+            
+            function showSystemError() {
+                const systemInfo = document.getElementById('systemInfo');
+                systemInfo.innerHTML = `
+                    <div class="col-span-full text-center py-8 text-red-600">
+                        <i data-lucide="alert-circle" class="h-8 w-8 mx-auto mb-2"></i>
+                        <p>Failed to load system information</p>
+                    </div>
+                `;
+                lucide.createIcons();
+            }
+            
+            function showRebootConfirmation() {
+                if (confirm('Are you sure you want to reboot the system?\n\nThis action will restart the system immediately and may cause data loss if unsaved work exists.')) {
+                    performReboot();
+                }
+            }
+            
+            function performReboot() {
+                const originalText = rebootBtn.textContent;
+                const originalDisabled = rebootBtn.disabled;
+                
+                rebootBtn.disabled = true;
+                rebootBtn.innerHTML = '<i data-lucide="loader-2" class="h-4 w-4 mr-2 animate-spin" aria-hidden="true"></i>Rebooting...';
+                lucide.createIcons();
+                
+                fetch('/api/system/reboot', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showNotification('System reboot initiated successfully', 'success');
+                        // Show countdown or redirect message
+                        setTimeout(() => {
+                            showNotification('System is rebooting...', 'info');
+                        }, 1000);
+                    } else if (data.status === 'logged') {
+                        showNotification(data.message, 'info');
+                    } else {
+                        throw new Error(data.error || 'Unknown error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error rebooting system:', error);
+                    showNotification(`Failed to reboot system: ${error.message}`, 'error');
+                })
+                .finally(() => {
+                    rebootBtn.disabled = originalDisabled;
+                    rebootBtn.innerHTML = originalText;
+                    lucide.createIcons();
+                });
+            }
+            
+            function showNotification(message, type = 'info') {
+                // Create notification element
+                const notification = document.createElement('div');
+                notification.className = `fixed top-4 right-4 z-50 max-w-sm w-full bg-background border border-border rounded-lg shadow-lg p-4 transform transition-all duration-300 ease-in-out`;
+                
+                const iconMap = {
+                    'success': 'check-circle',
+                    'error': 'x-circle',
+                    'info': 'info'
+                };
+                
+                const colorMap = {
+                    'success': 'text-green-600 dark:text-green-400',
+                    'error': 'text-red-600 dark:text-red-400',
+                    'info': 'text-blue-600 dark:text-blue-400'
+                };
+                
+                notification.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <div class="flex-shrink-0">
+                            <i data-lucide="${iconMap[type]}" class="h-5 w-5 ${colorMap[type]}" aria-hidden="true"></i>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm font-medium">${message}</p>
+                        </div>
+                        <button class="flex-shrink-0 ml-2 text-current opacity-70 hover:opacity-100 transition-opacity" onclick="this.parentElement.parentElement.remove()" aria-label="Close notification">
+                            <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                `;
+
+                document.body.appendChild(notification);
+                lucide.createIcons();
+
+                // Animate in
+                requestAnimationFrame(() => {
+                    notification.classList.add('translate-x-0', 'opacity-100');
+                });
+
+                // Auto remove after 5 seconds
+                setTimeout(() => {
+                    notification.classList.add('translate-x-full', 'opacity-0');
+                    setTimeout(() => {
+                        if (notification.parentElement) {
+                            notification.remove();
+                        }
+                    }, 300);
+                }, 5000);
+            }
+            
+            // Load system info on page load
+            loadSystemInfo();
+            
+            // Initialize mobile navigation
+            initializeMobileNavigation();
+        });
+        
+        function initializeMobileNavigation() {
+            const openSidebar = document.getElementById('openSidebar');
+            const closeSidebar = document.getElementById('closeSidebar');
+            const sidebar = document.getElementById('sidebar');
+            const mobileOverlay = document.getElementById('mobileOverlay');
+
+            if (openSidebar) {
+                openSidebar.addEventListener('click', () => {
+                    sidebar.classList.remove('-translate-x-full');
+                    mobileOverlay.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden';
+                });
+            }
+
+            if (closeSidebar) {
+                closeSidebar.addEventListener('click', () => {
+                    sidebar.classList.add('-translate-x-full');
+                    mobileOverlay.classList.add('hidden');
+                    document.body.style.overflow = '';
+                });
+            }
+
+            if (mobileOverlay) {
+                mobileOverlay.addEventListener('click', () => {
+                    sidebar.classList.add('-translate-x-full');
+                    mobileOverlay.classList.add('hidden');
+                    document.body.style.overflow = '';
+                });
+            }
+
+            // Close sidebar when clicking on navigation links (mobile only)
+            const navLinks = document.querySelectorAll('.sidebar-nav-item');
+            navLinks.forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth < 1024) { // lg breakpoint
+                        sidebar.classList.add('-translate-x-full');
+                        mobileOverlay.classList.add('hidden');
+                        document.body.style.overflow = '';
+                    }
+                });
+            });
+
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                if (window.innerWidth >= 1024) {
+                    sidebar.classList.add('-translate-x-full');
+                    mobileOverlay.classList.add('hidden');
+                    document.body.style.overflow = '';
+                }
+            });
+        }
+    </script>
+</body>
+</html>

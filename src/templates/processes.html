@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processes - ControlMate Utils</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body class="bg-background text-foreground">
+    <div class="min-h-screen bg-background">
+        <!-- Mobile overlay -->
+        <div id="mobileOverlay" class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden hidden"></div>
+        
+        <!-- Sidebar -->
+        <div id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-sidebar-background border-r border-sidebar-border transform -translate-x-full transition-transform duration-300 ease-in-out lg:translate-x-0">
+            <div class="flex h-full flex-col">
+                <div class="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
+                    <div class="flex items-center space-x-2">
+                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary">
+                            <i data-lucide="activity" class="h-4 w-4 text-sidebar-primary-foreground"></i>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-semibold text-sidebar-foreground">ControlMate</span>
+                            <span class="text-xs text-sidebar-foreground/70">System Utils</span>
+                        </div>
+                    </div>
+                    <button id="closeSidebar" class="lg:hidden p-1 rounded-md hover:bg-sidebar-accent" aria-label="Close sidebar">
+                        <i data-lucide="x" class="h-5 w-5 text-sidebar-foreground"></i>
+                    </button>
+                </div>
+                <nav class="flex-1 space-y-1 p-4">
+                    <a href="/" class="sidebar-nav-item">
+                        <i data-lucide="network" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Network Manager</span>
+                    </a>
+                    <a href="/processes" class="sidebar-nav-item active" aria-current="page">
+                        <i data-lucide="activity" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Processes</span>
+                    </a>
+                    <a href="/system" class="sidebar-nav-item">
+                        <i data-lucide="settings" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>System</span>
+                    </a>
+                </nav>
+                <div class="border-t border-sidebar-border p-4">
+                    <button id="themeToggle" class="sidebar-nav-item w-full" aria-label="Toggle dark mode">
+                        <i data-lucide="moon" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Dark Mode</span>
+                    </button>
+                    <div class="mt-3 text-center">
+                        <span id="versionDisplay" class="text-xs text-sidebar-foreground/50">v1.0.1</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="lg:pl-64">
+            <!-- Header -->
+            <header class="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                <div class="container mx-auto px-4 lg:px-6 py-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-4">
+                            <button id="openSidebar" class="lg:hidden p-2 rounded-md hover:bg-accent" aria-label="Open sidebar">
+                                <i data-lucide="menu" class="h-5 w-5"></i>
+                            </button>
+                            <div>
+                                <h1 class="text-2xl lg:text-3xl font-bold tracking-tight">System Processes</h1>
+                                <p class="text-sm lg:text-base text-muted-foreground hidden sm:block">Monitor and manage running processes</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2 lg:space-x-4">
+                            <div class="flex items-center space-x-2 rounded-lg bg-muted px-2 lg:px-3 py-2 system-status-indicator">
+                                <div class="h-2 w-2 rounded-full bg-green-500 system-status-dot"></div>
+                                <span class="text-xs lg:text-sm font-medium hidden sm:inline system-status-text">System Online</span>
+                                <span class="text-xs lg:text-sm font-medium sm:hidden system-status-text-mobile">Online</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <main class="container mx-auto px-4 lg:px-6 py-4">
+                <!-- Processes Section -->
+                <section>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 space-y-2 sm:space-y-0">
+                        <div>
+                            <h2 class="text-lg font-bold tracking-tight">Processes</h2>
+                            <p class="text-sm text-muted-foreground">System processes</p>
+                        </div>
+                        <button id="refreshProcesses" class="btn-secondary w-full sm:w-auto" aria-label="Refresh processes">
+                            <i data-lucide="refresh-cw" class="h-4 w-4 mr-2" aria-hidden="true"></i>
+                            Refresh
+                        </button>
+                    </div>
+                    
+                    <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                        <div class="p-4">
+                            <div id="processesLoading" class="hidden text-center py-8">
+                                <div class="flex flex-col items-center space-y-3">
+                                    <div class="relative">
+                                        <i data-lucide="loader-2" class="h-6 w-6 animate-spin text-primary"></i>
+                                    </div>
+                                    <div class="text-center">
+                                        <p class="text-sm font-medium">Loading processes...</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Search and Filter -->
+                            <div class="mb-4 space-y-3">
+                                <div class="flex flex-col sm:flex-row gap-3">
+                                    <div class="flex-1">
+                                        <input type="text" id="processSearch" placeholder="Search processes..." class="form-input" aria-label="Search processes">
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <select id="statusFilter" class="form-select" aria-label="Filter by status">
+                                            <option value="">All Status</option>
+                                            <option value="R">Running</option>
+                                            <option value="S">Sleeping</option>
+                                            <option value="D">Uninterruptible</option>
+                                            <option value="Z">Zombie</option>
+                                            <option value="T">Stopped</option>
+                                        </select>
+                                        <select id="userFilter" class="form-select" aria-label="Filter by user">
+                                            <option value="">All Users</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Processes Table -->
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="border-b">
+                                            <th class="text-left py-2 px-3 font-medium text-muted-foreground">PID</th>
+                                            <th class="text-left py-2 px-3 font-medium text-muted-foreground">Name</th>
+                                            <th class="text-left py-2 px-3 font-medium text-muted-foreground">User</th>
+                                            <th class="text-left py-2 px-3 font-medium text-muted-foreground">Status</th>
+                                            <th class="text-left py-2 px-3 font-medium text-muted-foreground">CPU</th>
+                                            <th class="text-left py-2 px-3 font-medium text-muted-foreground">Memory</th>
+                                            <th class="text-left py-2 px-3 font-medium text-muted-foreground">Command</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="processesList">
+                                        <!-- Processes will be populated here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        lucide.createIcons();
+        
+        // Processes page specific functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const refreshBtn = document.getElementById('refreshProcesses');
+            const searchInput = document.getElementById('processSearch');
+            const statusFilter = document.getElementById('statusFilter');
+            const userFilter = document.getElementById('userFilter');
+            const processesList = document.getElementById('processesList');
+            const processesLoading = document.getElementById('processesLoading');
+            
+            let allProcesses = [];
+            let filteredProcesses = [];
+            
+            // Load processes on page load
+            loadProcesses();
+            
+            // Refresh button - preserve current filters
+            refreshBtn.addEventListener('click', function() {
+                loadProcesses();
+            });
+            
+            // Search functionality
+            searchInput.addEventListener('input', filterProcesses);
+            statusFilter.addEventListener('change', filterProcesses);
+            userFilter.addEventListener('change', filterProcesses);
+            
+            function loadProcesses() {
+                processesLoading.classList.remove('hidden');
+                processesList.innerHTML = '';
+                
+                fetch('/api/processes')
+                    .then(response => response.json())
+                    .then(data => {
+                        allProcesses = data;
+                        
+                        // Populate user filter
+                        populateUserFilter();
+                        
+                        // Apply current filters after loading new data
+                        filterProcesses();
+                        
+                        processesLoading.classList.add('hidden');
+                    })
+                    .catch(error => {
+                        console.error('Error loading processes:', error);
+                        processesLoading.classList.add('hidden');
+                        processesList.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-muted-foreground">Error loading processes</td></tr>';
+                    });
+            }
+            
+            function populateUserFilter() {
+                const users = [...new Set(allProcesses.map(p => p.user))].sort();
+                const currentUserValue = userFilter.value;
+                userFilter.innerHTML = '<option value="">All Users</option>';
+                users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user;
+                    option.textContent = user;
+                    userFilter.appendChild(option);
+                });
+                // Restore previous selection
+                userFilter.value = currentUserValue;
+            }
+            
+            function filterProcesses() {
+                const searchTerm = searchInput.value.toLowerCase();
+                const statusFilterValue = statusFilter.value;
+                const userFilterValue = userFilter.value;
+                
+                filteredProcesses = allProcesses.filter(process => {
+                    const matchesSearch = process.name.toLowerCase().includes(searchTerm) || 
+                                        process.command.toLowerCase().includes(searchTerm);
+                    const matchesStatus = !statusFilterValue || process.status.includes(statusFilterValue);
+                    const matchesUser = !userFilterValue || process.user === userFilterValue;
+                    
+                    return matchesSearch && matchesStatus && matchesUser;
+                });
+                
+                displayProcesses();
+            }
+            
+            function displayProcesses() {
+                if (filteredProcesses.length === 0) {
+                    processesList.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-muted-foreground">No processes found</td></tr>';
+                    return;
+                }
+                
+                processesList.innerHTML = filteredProcesses.map(process => `
+                    <tr class="border-b hover:bg-muted/50">
+                        <td class="py-2 px-3 font-mono text-xs">${process.pid}</td>
+                        <td class="py-2 px-3">
+                            <div class="font-medium text-sm">${process.name}</div>
+                        </td>
+                        <td class="py-2 px-3 text-xs text-muted-foreground">${process.user}</td>
+                        <td class="py-2 px-3">
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusClass(process.status)}">
+                                ${getStatusDisplay(process.status)}
+                            </span>
+                        </td>
+                        <td class="py-2 px-3 font-mono text-xs">${process.cpu}</td>
+                        <td class="py-2 px-3 font-mono text-xs">${process.memory}</td>
+                        <td class="py-2 px-3 text-xs text-muted-foreground max-w-xs truncate" title="${process.command}">
+                            ${process.command}
+                        </td>
+                    </tr>
+                `).join('');
+            }
+            
+            function getStatusClass(status) {
+                // Handle multi-character status codes
+                if (status.includes('R')) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+                if (status.includes('S')) return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+                if (status.includes('D')) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+                if (status.includes('Z')) return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+                if (status.includes('T')) return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+                return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+            }
+            
+            function getStatusDisplay(status) {
+                // Show the primary status character
+                if (status.includes('R')) return 'R';
+                if (status.includes('S')) return 'S';
+                if (status.includes('D')) return 'D';
+                if (status.includes('Z')) return 'Z';
+                if (status.includes('T')) return 'T';
+                return status.charAt(0);
+            }
+        });
+    </script>
+</body>
+</html>

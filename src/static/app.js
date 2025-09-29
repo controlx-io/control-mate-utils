@@ -4,10 +4,14 @@ class NetworkManager {
         this.currentWiFi = null;
         this.nmcliAvailable = false;
         this.isDarkMode = localStorage.getItem('darkMode') === 'true';
+        this.systemHealth = { status: 'unknown', uptime: '', network_check: false };
+        this.healthCheckInterval = null;
         this.initializeEventListeners();
         this.initializeTheme();
         this.loadVersion();
+        this.loadInterfaces(); // Always refresh network interfaces on page load
         this.checkNmcliStatus();
+        this.startHealthMonitoring();
     }
 
     async loadVersion() {
@@ -36,7 +40,6 @@ class NetworkManager {
             this.nmcliAvailable = status.available;
             
             if (this.nmcliAvailable) {
-                this.loadInterfaces();
                 this.loadCurrentWiFi();
             } else {
                 this.showNmcliError();
@@ -45,6 +48,76 @@ class NetworkManager {
             console.error('Error checking nmcli status:', error);
             this.nmcliAvailable = false;
             this.showNmcliError();
+        }
+    }
+
+    async checkSystemHealth() {
+        try {
+            const response = await fetch('/api/health');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            this.systemHealth = await response.json();
+            this.updateSystemStatusIndicator();
+        } catch (error) {
+            console.error('Error checking system health:', error);
+            this.systemHealth = { status: 'offline', uptime: '', network_check: false };
+            this.updateSystemStatusIndicator();
+        }
+    }
+
+    startHealthMonitoring() {
+        // Initial health check
+        this.checkSystemHealth();
+        
+        // Set up periodic health checks every 30 seconds
+        this.healthCheckInterval = setInterval(() => {
+            this.checkSystemHealth();
+        }, 30000);
+    }
+
+    updateSystemStatusIndicator() {
+        const statusIndicator = document.querySelector('.system-status-indicator');
+        const statusDot = document.querySelector('.system-status-dot');
+        const statusText = document.querySelector('.system-status-text');
+        
+        if (!statusIndicator || !statusDot || !statusText) {
+            console.warn('System status indicator elements not found');
+            return;
+        }
+
+        const { status, uptime, network_check } = this.systemHealth;
+        
+        // Update status dot color
+        statusDot.className = 'h-2 w-2 rounded-full system-status-dot';
+        switch (status) {
+            case 'online':
+                statusDot.classList.add('bg-green-500');
+                statusText.textContent = 'System Online';
+                statusText.className = 'text-xs lg:text-sm font-medium hidden sm:inline system-status-text text-green-600 dark:text-green-400';
+                break;
+            case 'degraded':
+                statusDot.classList.add('bg-yellow-500');
+                statusText.textContent = 'System Degraded';
+                statusText.className = 'text-xs lg:text-sm font-medium hidden sm:inline system-status-text text-yellow-600 dark:text-yellow-400';
+                break;
+            case 'offline':
+            default:
+                statusDot.classList.add('bg-red-500');
+                statusText.textContent = 'System Offline';
+                statusText.className = 'text-xs lg:text-sm font-medium hidden sm:inline system-status-text text-red-600 dark:text-red-400';
+                break;
+        }
+        
+        // Update mobile status text
+        const mobileStatusText = document.querySelector('.system-status-text-mobile');
+        if (mobileStatusText) {
+            mobileStatusText.textContent = status === 'online' ? 'Online' : status === 'degraded' ? 'Degraded' : 'Offline';
+            mobileStatusText.className = `text-xs lg:text-sm font-medium sm:hidden system-status-text-mobile ${
+                status === 'online' ? 'text-green-600 dark:text-green-400' : 
+                status === 'degraded' ? 'text-yellow-600 dark:text-yellow-400' : 
+                'text-red-600 dark:text-red-400'
+            }`;
         }
     }
 
@@ -743,12 +816,27 @@ class NetworkManager {
         div.textContent = text;
         return div.innerHTML;
     }
+
+    cleanup() {
+        if (this.healthCheckInterval) {
+            clearInterval(this.healthCheckInterval);
+            this.healthCheckInterval = null;
+        }
+    }
 }
 
 // Initialize the app when DOM is loaded
+let networkManager;
 document.addEventListener('DOMContentLoaded', () => {
     // Small delay to ensure all elements are fully rendered
     setTimeout(() => {
-        new NetworkManager();
+        networkManager = new NetworkManager();
     }, 10);
+});
+
+// Cleanup when page is unloaded
+window.addEventListener('beforeunload', () => {
+    if (networkManager) {
+        networkManager.cleanup();
+    }
 });

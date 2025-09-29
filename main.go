@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,16 +44,34 @@ type CurrentWiFi struct {
 	Connected bool   `json:"connected"`
 }
 
+type Process struct {
+	PID     int    `json:"pid"`
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	CPU     string `json:"cpu"`
+	Memory  string `json:"memory"`
+	User    string `json:"user"`
+	Command string `json:"command"`
+}
+
 type ConnectionRequest struct {
 	SSID     string `json:"ssid"`
 	Password string `json:"password"`
 	Security string `json:"security"`
 }
 
+type SystemHealth struct {
+	Status       string `json:"status"`
+	Uptime       string `json:"uptime"`
+	NetworkCheck bool   `json:"network_check"`
+	LastCheck    string `json:"last_check"`
+}
+
 type App struct {
 	templates      *template.Template
 	nmcliAvailable bool
 	version        string
+	startTime      time.Time
 }
 
 var nmcliAvailable bool
@@ -75,7 +95,12 @@ func NewApp() *App {
 	templates := template.Must(template.ParseFS(templateFS, "src/templates/*.html"))
 	nmcliAvailable = checkNmcliAvailable()
 	version := readVersion()
-	return &App{templates: templates, nmcliAvailable: nmcliAvailable, version: version}
+	return &App{
+		templates:      templates,
+		nmcliAvailable: nmcliAvailable,
+		version:        version,
+		startTime:      time.Now(),
+	}
 }
 
 func (app *App) homeHandler(w http.ResponseWriter, r *http.Request) {
@@ -165,6 +190,91 @@ func (app *App) getCurrentWiFiHandler(w http.ResponseWriter, r *http.Request) {
 func (app *App) getVersionHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"version": app.version})
+}
+
+func (app *App) getSystemHealthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Check network connectivity
+	networkCheck := checkNetworkConnectivity()
+
+	// Calculate uptime
+	uptime := time.Since(app.startTime)
+	uptimeStr := formatUptime(uptime)
+
+	// Determine overall status
+	status := "online"
+	if !networkCheck {
+		status = "degraded"
+	}
+
+	health := SystemHealth{
+		Status:       status,
+		Uptime:       uptimeStr,
+		NetworkCheck: networkCheck,
+		LastCheck:    time.Now().Format(time.RFC3339),
+	}
+
+	json.NewEncoder(w).Encode(health)
+}
+
+func (app *App) processesHandler(w http.ResponseWriter, r *http.Request) {
+	app.templates.ExecuteTemplate(w, "processes.html", nil)
+}
+
+func (app *App) systemHandler(w http.ResponseWriter, r *http.Request) {
+	app.templates.ExecuteTemplate(w, "system.html", nil)
+}
+
+func (app *App) getProcessesHandler(w http.ResponseWriter, r *http.Request) {
+	processes, err := getProcesses()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(processes)
+}
+
+func (app *App) rebootHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Check if running on Windows or macOS (development machines)
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		log.Printf("Reboot requested on %s (development machine) - logging action instead of rebooting", runtime.GOOS)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":  "logged",
+			"message": fmt.Sprintf("Reboot action logged for %s development machine", runtime.GOOS),
+		})
+		return
+	}
+
+	// For Linux systems, attempt to reboot
+	log.Printf("Reboot requested on %s system", runtime.GOOS)
+
+	// Use systemctl if available (systemd systems)
+	cmd := exec.Command("systemctl", "reboot")
+	if err := cmd.Run(); err != nil {
+		// Fallback to reboot command
+		cmd = exec.Command("reboot")
+		if err := cmd.Run(); err != nil {
+			// Last resort: shutdown -r now
+			cmd = exec.Command("shutdown", "-r", "now")
+			if err := cmd.Run(); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]string{
+					"error": "Failed to initiate reboot: " + err.Error(),
+				})
+				return
+			}
+		}
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "success",
+		"message": "System reboot initiated",
+	})
 }
 
 func getNetworkInterfaces() ([]NetworkInterface, error) {
@@ -355,6 +465,140 @@ func connectToWiFi(ssid, password, security string) error {
 	return nil
 }
 
+func getProcesses() ([]Process, error) {
+	// Use ps command to get process information
+	// This is the most reliable cross-platform way to get process info
+	cmd := exec.Command("ps", "aux")
+	output, err := cmd.Output()
+	if err != nil {
+		// Fallback to ps -ef if ps aux fails
+		cmd = exec.Command("ps", "-ef")
+		output, err = cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get process list: %v", err)
+		}
+		return parsePsEfOutput(string(output))
+	}
+
+	return parsePsAuxOutput(string(output))
+}
+
+func parsePsAuxOutput(output string) ([]Process, error) {
+	var processes []Process
+	lines := strings.Split(output, "\n")
+
+	for i, line := range lines {
+		if i == 0 || strings.TrimSpace(line) == "" {
+			continue // Skip header line and empty lines
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) < 11 {
+			continue
+		}
+
+		// ps aux format: USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND
+		user := fields[0]
+		pidStr := fields[1]
+		cpu := fields[2]
+		mem := fields[3]
+		status := fields[7]
+		command := strings.Join(fields[10:], " ")
+
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil {
+			continue
+		}
+
+		// Extract process name from command
+		name := command
+		if spaceIndex := strings.Index(command, " "); spaceIndex > 0 {
+			name = command[:spaceIndex]
+		}
+
+		processes = append(processes, Process{
+			PID:     pid,
+			Name:    name,
+			Status:  status,
+			CPU:     cpu + "%",
+			Memory:  mem + "%",
+			User:    user,
+			Command: command,
+		})
+	}
+
+	return processes, nil
+}
+
+func parsePsEfOutput(output string) ([]Process, error) {
+	var processes []Process
+	lines := strings.Split(output, "\n")
+
+	for i, line := range lines {
+		if i == 0 || strings.TrimSpace(line) == "" {
+			continue // Skip header line and empty lines
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) < 8 {
+			continue
+		}
+
+		// ps -ef format: UID PID PPID C STIME TTY TIME CMD
+		user := fields[0]
+		pidStr := fields[1]
+		command := strings.Join(fields[7:], " ")
+
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil {
+			continue
+		}
+
+		// Extract process name from command
+		name := command
+		if spaceIndex := strings.Index(command, " "); spaceIndex > 0 {
+			name = command[:spaceIndex]
+		}
+
+		processes = append(processes, Process{
+			PID:     pid,
+			Name:    name,
+			Status:  "R", // Running (default for ps -ef)
+			CPU:     "0%",
+			Memory:  "0%",
+			User:    user,
+			Command: command,
+		})
+	}
+
+	return processes, nil
+}
+
+func checkNetworkConnectivity() bool {
+	// Try to connect to a reliable external service with a short timeout
+	conn, err := net.DialTimeout("tcp", "8.8.8.8:53", 3*time.Second)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
+
+func formatUptime(duration time.Duration) string {
+	totalSeconds := int(duration.Seconds())
+	days := totalSeconds / 86400
+	hours := (totalSeconds % 86400) / 3600
+	minutes := (totalSeconds % 3600) / 60
+
+	if days > 0 {
+		return fmt.Sprintf("%dd %dh %dm", days, hours, minutes)
+	} else if hours > 0 {
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	} else {
+		return fmt.Sprintf("%dm", minutes)
+	}
+}
+
 func main() {
 	// Set process title for better identification in process lists
 	os.Args[0] = "cm-utils"
@@ -370,12 +614,17 @@ func main() {
 
 	// Routes
 	r.HandleFunc("/", app.homeHandler).Methods("GET")
+	r.HandleFunc("/processes", app.processesHandler).Methods("GET")
+	r.HandleFunc("/system", app.systemHandler).Methods("GET")
 	r.HandleFunc("/api/version", app.getVersionHandler).Methods("GET")
+	r.HandleFunc("/api/health", app.getSystemHealthHandler).Methods("GET")
 	r.HandleFunc("/api/nmcli/status", app.getNmcliStatusHandler).Methods("GET")
 	r.HandleFunc("/api/interfaces", app.getInterfacesHandler).Methods("GET")
 	r.HandleFunc("/api/wifi/scan", app.getWiFiNetworksHandler).Methods("GET")
 	r.HandleFunc("/api/wifi/current", app.getCurrentWiFiHandler).Methods("GET")
 	r.HandleFunc("/api/wifi/connect", app.connectWiFiHandler).Methods("POST")
+	r.HandleFunc("/api/processes", app.getProcessesHandler).Methods("GET")
+	r.HandleFunc("/api/system/reboot", app.rebootHandler).Methods("POST")
 
 	fmt.Println("ControlMate Utils starting on :9080")
 	log.Fatal(http.ListenAndServe(":9080", r))
