@@ -317,7 +317,7 @@ chmod 644 "${POLKIT_RULE_FILE}"
 info "Adding sudo rule for passwordless reboot..."
 SUDOERS_FILE="/etc/sudoers.d/99-cm-utils-reboot"
 cat << EOF > "${SUDOERS_FILE}"
-%admin ALL=NOPASSWD: /sbin/reboot
+${INSTALL_USER} ALL=NOPASSWD: /bin/systemctl reboot, /sbin/reboot, /sbin/shutdown
 EOF
 chmod 440 "${SUDOERS_FILE}"
 
