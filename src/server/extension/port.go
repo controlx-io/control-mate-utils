@@ -104,7 +104,7 @@ func unpackBits(raw []byte, count int) []bool {
 	return out
 }
 
-func (pc *portClient) readCard(slave byte, spec ModelSpec) (CardState, error) {
+func (pc *portClient) readCard(slave byte, spec ModelSpec, readAll bool) (CardState, error) {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
 
@@ -160,27 +160,29 @@ func (pc *portClient) readCard(slave byte, spec ModelSpec) (CardState, error) {
 		}
 		time.Sleep(pc.operationDelay) // RS485 delay
 
-		// AO type
-		typeRaw, err := pc.client.ReadHoldingRegisters(0x0190, uint16(spec.AO))
-		if err == nil {
-			state.AOType = make([]string, spec.AO)
-			for i := 0; i < spec.AO; i++ {
-				val := binary.BigEndian.Uint16(typeRaw[i*2 : i*2+2])
-				if val == 0x0001 {
-					state.AOType[i] = "0-10V"
-				} else if val == 0x0004 {
-					state.AOType[i] = "4-20mA"
-				} else {
-					state.AOType[i] = fmt.Sprintf("0x%04X", val)
+		if readAll {
+			typeRaw, err := pc.client.ReadHoldingRegisters(0x0190, uint16(spec.AO))
+			if err == nil {
+				state.AOType = make([]string, spec.AO)
+				for i := 0; i < spec.AO; i++ {
+					val := binary.BigEndian.Uint16(typeRaw[i*2 : i*2+2])
+					if val == 0x0001 {
+						state.AOType[i] = "0-10V"
+					} else if val == 0x0004 {
+						state.AOType[i] = "4-20mA"
+					} else {
+						state.AOType[i] = fmt.Sprintf("0x%04X", val)
+					}
 				}
 			}
+			time.Sleep(pc.operationDelay) // RS485 delay
 		}
-		time.Sleep(pc.operationDelay) // RS485 delay
 	}
 
-	// Read Serial Number
-	state.SerialNumber = pc.readSerialNumber()
-	time.Sleep(pc.operationDelay) // RS485 delay
+	if readAll {
+		state.SerialNumber = pc.readSerialNumber()
+		time.Sleep(pc.operationDelay) // RS485 delay
+	}
 
 	return state, nil
 }

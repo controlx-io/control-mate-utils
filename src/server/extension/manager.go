@@ -95,9 +95,9 @@ func NewManager() *Manager {
 		cards:          make(map[string]*Card),
 		nextID:         1,
 		serial:         serialCfg{Baud: 9600, Par: "N", Stop: 1, Data: 8},
-		timeout:        100 * time.Millisecond,
-		cycleDelay:     100 * time.Millisecond,
-		operationDelay: 10 * time.Millisecond,
+		timeout:        50 * time.Millisecond,
+		cycleDelay:     1 * time.Millisecond,
+		operationDelay: 1 * time.Millisecond,
 		writeQueue:     make([]writeOperation, 0),
 		stopChan:       make(chan struct{}),
 		clientFactory:  modbus.NewClient,
@@ -169,7 +169,7 @@ func (m *Manager) AddCard(portPath string, slave byte, module string) (*Card, er
 	m.cards[c.ID] = c
 	m.mu.Unlock()
 
-	state, err := pc.readCard(slave, spec)
+	state, err := pc.readCard(slave, spec, true)
 	if err == nil {
 		c.Last = state
 	}
@@ -202,6 +202,7 @@ func (m *Manager) RefreshAll() []*Card {
 	}
 	m.mu.Unlock()
 
+	// Sort by ID for consistent ordering when returned to HTTP handlers
 	sort.Slice(cards, func(i, j int) bool {
 		idi, _ := strconv.Atoi(cards[i].ID)
 		idj, _ := strconv.Atoi(cards[j].ID)
@@ -210,22 +211,100 @@ func (m *Manager) RefreshAll() []*Card {
 
 	for _, c := range cards {
 		spec := ModelTable[c.Module]
-		pc, err := m.ensurePort(c.PortPath)
-		if err != nil {
-			c.Last.Error = err.Error()
+
+		// Get port directly - ports are created when cards are added via AddCard()
+		m.mu.Lock()
+		pc, ok := m.ports[c.PortPath]
+		m.mu.Unlock()
+
+		if !ok {
+			// Port should exist, but handle edge case defensively
+			c.Last.Error = fmt.Sprintf("port %s not found", c.PortPath)
 			continue
 		}
-		state, err := pc.readCard(c.SlaveID, spec)
+
+		state, err := pc.readCard(c.SlaveID, spec, false)
 		if err != nil {
 			c.Last.Error = err.Error()
 		} else {
+			// Preserve SN and AOType from previous state (read only during AddCard)
+			state.SerialNumber = c.Last.SerialNumber
+			state.AOType = c.Last.AOType
 			c.Last = state
 		}
 	}
 	return cards
 }
 
-// StartCycle starts the continuous read-write cycle: read all → delay → write all → delay → repeat
+// GetAllCards returns all cards without reading (uses cached state)
+// This is used by HTTP handlers since the cycle already keeps cards up to date
+func (m *Manager) GetAllCards() []*Card {
+	m.mu.Lock()
+	cards := make([]*Card, 0, len(m.cards))
+	for _, c := range m.cards {
+		cards = append(cards, c)
+	}
+	m.mu.Unlock()
+
+	// Sort by ID for consistent ordering
+	sort.Slice(cards, func(i, j int) bool {
+		idi, _ := strconv.Atoi(cards[i].ID)
+		idj, _ := strconv.Atoi(cards[j].ID)
+		return idi < idj
+	})
+
+	return cards
+}
+
+// ReadAllAndProcessWrites reads all cards and processes pending writes after each card read
+// This minimizes write latency by processing writes immediately as they're queued
+func (m *Manager) ReadAllAndProcessWrites() []*Card {
+	m.mu.Lock()
+	cards := make([]*Card, 0, len(m.cards))
+	for _, c := range m.cards {
+		cards = append(cards, c)
+	}
+	m.mu.Unlock()
+
+	// Sort by ID for consistent ordering when returned to HTTP handlers
+	sort.Slice(cards, func(i, j int) bool {
+		idi, _ := strconv.Atoi(cards[i].ID)
+		idj, _ := strconv.Atoi(cards[j].ID)
+		return idi < idj
+	})
+
+	for _, c := range cards {
+		spec := ModelTable[c.Module]
+
+		// Get port directly - ports are created when cards are added via AddCard()
+		m.mu.Lock()
+		pc, ok := m.ports[c.PortPath]
+		m.mu.Unlock()
+
+		if !ok {
+			// Port should exist, but handle edge case defensively
+			c.Last.Error = fmt.Sprintf("port %s not found", c.PortPath)
+			continue
+		}
+
+		state, err := pc.readCard(c.SlaveID, spec, false)
+		if err != nil {
+			c.Last.Error = err.Error()
+		} else {
+			// Preserve SN and AOType from previous state (read only during AddCard)
+			state.SerialNumber = c.Last.SerialNumber
+			state.AOType = c.Last.AOType
+			c.Last = state
+		}
+
+		// Process any pending writes after each card read to minimize latency
+		m.ProcessWriteQueue()
+	}
+	return cards
+}
+
+// StartCycle starts the continuous read-write cycle: interleaves reads and writes
+// This prevents writes from being delayed when there are many cards to read
 func (m *Manager) StartCycle() {
 	go func() {
 		for {
@@ -233,16 +312,8 @@ func (m *Manager) StartCycle() {
 			case <-m.stopChan:
 				return
 			default:
-				// Read phase: read all cards
-				m.RefreshAll()
-
-				// Delay before write phase
-				time.Sleep(m.operationDelay)
-
-				// Write phase: process all queued writes
-				m.ProcessWriteQueue()
-
-				// Delay after write phase before next cycle
+				// Read all cards and process writes after each card read
+				m.ReadAllAndProcessWrites()
 				time.Sleep(m.cycleDelay)
 			}
 		}

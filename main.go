@@ -337,7 +337,9 @@ func (app *App) rediscoverExtensionCardsHandler(w http.ResponseWriter, r *http.R
 
 func (app *App) getExtensionCardsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	cards := app.extensionMgr.RefreshAll()
+	// Use GetAllCards() instead of RefreshAll() to avoid duplicate reads
+	// The cycle already keeps cards up to date, so we just return cached data
+	cards := app.extensionMgr.GetAllCards()
 	json.NewEncoder(w).Encode(map[string]interface{}{"cards": cards})
 }
 
@@ -368,6 +370,7 @@ func (app *App) extensionCardHandler(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(map[string]string{"error": "invalid body"})
 			return
 		}
+		log.Printf("writing DO request received for card=%s index=%d state=%v", cardID, req.Index, req.State)
 		if err := app.extensionMgr.QueueWriteDO(cardID, req.Index, req.State); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -868,4 +871,3 @@ func main() {
 	fmt.Println("ControlMate Utils starting on :9080")
 	log.Fatal(http.ListenAndServe(":9080", r))
 }
-

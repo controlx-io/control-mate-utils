@@ -243,7 +243,7 @@
                         <div class="card-timestamp">Updated: ${timestamp}</div>
                     </div>
                     <button class="btn-reboot" onclick="rebootCard('${card.id}')" title="Reboot Card">
-                        <i data-lucide="power" class="h-4 w-4"></i>
+                        <i data-lucide="refresh-cw" class="h-4 w-4"></i>
                     </button>
                 </div>
                 <div class="card-body">`;
@@ -994,7 +994,7 @@
             }
         });
 
-        setInterval(loadCards, 800);
+        setInterval(loadCards, 500);
         loadCards();
     </script>
 </body>
