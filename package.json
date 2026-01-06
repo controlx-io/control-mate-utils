@@ -3,6 +3,7 @@
   "version": "1.0.11",
   "description": "Network and resource management utility for ControlMate PC",
   "scripts": {
+    "test": "go test ./...",
     "build": "npm run build-css && npm run build-go",
     "build-css": "tailwindcss -i ./src/web/static/styles.css -o ./build/static/styles.css --minify",
     "build-go": "npm run build-go:amd64 && npm run build-go:arm64",

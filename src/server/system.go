@@ -44,8 +44,10 @@ func IsJasperMate() bool {
 }
 
 // CheckNmcliAvailable checks if nmcli is installed and available
+var execCommand = exec.Command
+
 func CheckNmcliAvailable() bool {
-	cmd := exec.Command("which", "nmcli")
+	cmd := execCommand("which", "nmcli")
 	err := cmd.Run()
 	return err == nil
 }

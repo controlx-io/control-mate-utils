@@ -3,7 +3,7 @@ package discovery
 import (
 	"bytes"
 	"encoding/json"
-	"log"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -14,7 +14,7 @@ import (
 
 const (
 	// ServerURL      = "https://jasperx.io/api/v1.0/device/jaspermate"
-	serverURL      = "http://localhost:8080/api/v1.0/device/jaspermate"
+	serverURL      = "http://192.168.97.192:3000/api/v1.0/device/jaspermate"
 	reportInterval = 5 * time.Minute
 )
 
@@ -22,7 +22,7 @@ type Payload struct {
 	DeviceID string   `json:"deviceId"`
 	LocalIP  string   `json:"localIp"`
 	OtherIPs []string `json:"otherIPs"`
-	Type     string   `json:"type"`
+	Type     string   `json:"type"` // jaspermate or controlmate
 }
 
 // Start begins the discovery agent in a background goroutine
@@ -31,7 +31,7 @@ func Start() {
 }
 
 func run() {
-	log.Println("Starting Discovery Agent...")
+	fmt.Println("Starting Discovery Agent...")
 
 	// 1. Send immediately on startup
 	reportStatus()
@@ -51,7 +51,7 @@ func run() {
 		case <-monitorTicker.C:
 			currentIP := getOutboundIP()
 			if currentIP != lastIP {
-				log.Printf("Network change detected: %s -> %s\n", lastIP, currentIP)
+				fmt.Printf("Network change detected: %s -> %s\n", lastIP, currentIP)
 				lastIP = currentIP
 				reportStatus()
 			}
@@ -60,11 +60,11 @@ func run() {
 }
 
 // getOutboundIP determines the preferred local IP for internet traffic
-func getOutboundIP() string {
+var getOutboundIP = func() string {
 	// We don't actually connect, just ask the kernel for the routing preference
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
-		log.Println("Error resolving outbound IP:", err)
+		fmt.Println("Error resolving outbound IP:", err)
 		return ""
 	}
 	defer conn.Close()
@@ -74,7 +74,7 @@ func getOutboundIP() string {
 }
 
 // getAllNetworkIPs collects all non-loopback IPv4 addresses from all network interfaces
-func getAllNetworkIPs() []string {
+var getAllNetworkIPs = func() []string {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return nil
@@ -105,6 +105,28 @@ func getAllNetworkIPs() []string {
 	return allIPs
 }
 
+func createPayload(localIP string, allIPs []string) Payload {
+	// Separate local IP from other IPs
+	var otherIPs []string
+	for _, ip := range allIPs {
+		if ip != localIP {
+			otherIPs = append(otherIPs, ip)
+		}
+	}
+
+	deviceType := "controlmate"
+	if server.IsJasperMate() {
+		deviceType = "jaspermate"
+	}
+
+	return Payload{
+		DeviceID: config.GetDeviceID(),
+		LocalIP:  localIP,
+		OtherIPs: otherIPs,
+		Type:     deviceType,
+	}
+}
+
 func reportStatus() {
 	localIP := getOutboundIP()
 	if localIP == "" {
@@ -114,44 +136,23 @@ func reportStatus() {
 	// Get all network IPs
 	allIPs := getAllNetworkIPs()
 
-	// Separate local IP from other IPs
-	var otherIPs []string
-	for _, ip := range allIPs {
-		if ip != localIP {
-			otherIPs = append(otherIPs, ip)
-		}
-	}
-
-	deviceType := "control-mate"
-	if server.IsJasperMate() {
-		deviceType = "jasper-mate"
-	}
-
-	data := Payload{
-		DeviceID: config.GetDeviceID(),
-		LocalIP:  localIP,
-		OtherIPs: otherIPs,
-		Type:     deviceType,
-	}
+	data := createPayload(localIP, allIPs)
 
 	jsonData, _ := json.Marshal(data)
-	log.Printf("Reported: %s\n", string(jsonData))
+	fmt.Printf("Reported: %s\n", string(jsonData))
 
-	// temporary disable
-	// resp, err := httpPost(serverURL, jsonData)
-	// if err != nil {
-	// 	log.Printf("Failed to report to cloud: %v\n", err)
-	// } else {
-	// 	log.Printf("Reported status: localIp=%s, otherIPs=%v (Status: %d)\n", localIP, otherIPs, resp.StatusCode)
-	// 	resp.Body.Close()
-	// }
+	resp, err := httpPost(serverURL, jsonData)
+	if err != nil {
+		fmt.Printf("Failed to report to cloud: %v\n", err)
+	} else {
+		resp.Body.Close()
+	}
 }
 
 // Simple wrapper for HTTP POST with timeout
-func httpPost(url string, data []byte) (*http.Response, error) {
+var httpPost = func(url string, data []byte) (*http.Response, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	req.Header.Set("Content-Type", "application/json")
 	return client.Do(req)
 }
-

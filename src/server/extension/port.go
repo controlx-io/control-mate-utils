@@ -19,7 +19,7 @@ type serialCfg struct {
 
 type portClient struct {
 	path           string
-	handler        *modbus.RTUClientHandler
+	handler        ModbusHandler
 	client         modbus.Client
 	mu             sync.Mutex
 	operationDelay time.Duration // Delay between Modbus operations for RS485
@@ -28,10 +28,23 @@ type portClient struct {
 func detectModel(pc *portClient, slave byte) string {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
-	pc.handler.SlaveId = slave
+
+	// Modbus handlers usually store SlaveID.
+	// RTUClientHandler has SlaveId. TCPClientHandler also has it.
+	// But ClientHandler interface doesn't expose it.
+	// We need to type assert or use SetSlave if available (goburrow doesn't have SetSlave on interface)
+	// Actually, goburrow/modbus RTUClientHandler has SlaveId field.
+	// If we use a mock, we need to handle this.
+	// For now, let's type assert to RTUClientHandler if possible, or use a custom interface.
+
+	setSlaveID(pc.handler, slave)
 
 	di, doCount, ai, ao := probeCounts(pc)
 	return guessModel(di, doCount, ai, ao)
+}
+
+func setSlaveID(h ModbusHandler, slave byte) {
+	h.SetSlave(slave)
 }
 
 // probeCounts detects DI/DO/AI/AO counts similar to read_di.go
@@ -95,7 +108,7 @@ func (pc *portClient) readCard(slave byte, spec ModelSpec) (CardState, error) {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
 
-	pc.handler.SlaveId = slave
+	setSlaveID(pc.handler, slave)
 	state := CardState{Timestamp: time.Now()}
 
 	if spec.DI > 0 {
@@ -199,7 +212,7 @@ func (pc *portClient) readSerialNumber() string {
 func (pc *portClient) writeDO(slave byte, index uint16, state bool) error {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
-	pc.handler.SlaveId = slave
+	setSlaveID(pc.handler, slave)
 
 	var coil uint16 = 0x0000
 	if state {
@@ -215,7 +228,7 @@ func (pc *portClient) writeDO(slave byte, index uint16, state bool) error {
 func (pc *portClient) writeAO(slave byte, index int, value float32) error {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
-	pc.handler.SlaveId = slave
+	setSlaveID(pc.handler, slave)
 
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, math.Float32bits(value))
@@ -231,7 +244,7 @@ func (pc *portClient) writeAO(slave byte, index int, value float32) error {
 func (pc *portClient) writeAOType(slave byte, index int, mode string) error {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
-	pc.handler.SlaveId = slave
+	setSlaveID(pc.handler, slave)
 
 	var val uint16
 	if mode == "0-10V" {
@@ -249,7 +262,7 @@ func (pc *portClient) writeAOType(slave byte, index int, mode string) error {
 func (pc *portClient) reboot(slave byte) error {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
-	pc.handler.SlaveId = slave
+	setSlaveID(pc.handler, slave)
 
 	// Register address 0x0010 (16 decimal), value 0xFF00
 	_, err := pc.client.WriteSingleRegister(0x0010, 0xFF00)

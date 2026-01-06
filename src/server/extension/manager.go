@@ -11,6 +11,25 @@ import (
 	"github.com/goburrow/modbus"
 )
 
+// ModbusHandler interface extends modbus.ClientHandler with Connect method and SetSlave
+type ModbusHandler interface {
+	modbus.ClientHandler
+	Connect() error
+	SetSlave(slave byte)
+}
+
+// rtuWrapper wraps modbus.RTUClientHandler to satisfy ModbusHandler interface
+type rtuWrapper struct {
+	*modbus.RTUClientHandler
+}
+
+func (r *rtuWrapper) SetSlave(slave byte) {
+	r.SlaveId = slave
+}
+
+type ClientFactory func(handler modbus.ClientHandler) modbus.Client
+type HandlerFactory func(path string, cfg serialCfg) (ModbusHandler, error)
+
 type CardState struct {
 	Timestamp    time.Time `json:"timestamp"`
 	DI           []bool    `json:"di,omitempty"`
@@ -57,6 +76,17 @@ type Manager struct {
 	operationDelay time.Duration    // Delay between each Modbus operation (RS485)
 	writeQueue     []writeOperation // Queue of pending write operations
 	stopChan       chan struct{}    // Channel to stop background goroutine
+	clientFactory  ClientFactory    // Factory for creating modbus clients
+	handlerFactory HandlerFactory   // Factory for creating modbus handlers
+}
+
+func defaultHandlerFactory(path string, cfg serialCfg) (ModbusHandler, error) {
+	h := modbus.NewRTUClientHandler(path)
+	h.BaudRate = cfg.Baud
+	h.DataBits = cfg.Data
+	h.Parity = cfg.Par
+	h.StopBits = cfg.Stop
+	return &rtuWrapper{h}, nil
 }
 
 func NewManager() *Manager {
@@ -70,6 +100,8 @@ func NewManager() *Manager {
 		operationDelay: 10 * time.Millisecond,
 		writeQueue:     make([]writeOperation, 0),
 		stopChan:       make(chan struct{}),
+		clientFactory:  modbus.NewClient,
+		handlerFactory: defaultHandlerFactory,
 	}
 }
 
@@ -81,12 +113,17 @@ func (m *Manager) ensurePort(path string) (*portClient, error) {
 		return p, nil
 	}
 
-	h := modbus.NewRTUClientHandler(path)
-	h.BaudRate = m.serial.Baud
-	h.DataBits = m.serial.Data
-	h.Parity = m.serial.Par
-	h.StopBits = m.serial.Stop
-	h.Timeout = m.timeout
+	h, err := m.handlerFactory(path, m.serial)
+	if err != nil {
+		return nil, err
+	}
+
+	// We need to set timeout on the handler if possible, but ClientHandler interface doesn't have Timeout.
+	// However, RTUClientHandler has it.
+	// For testing, we might ignore it or assert type.
+	if rtu, ok := h.(*rtuWrapper); ok {
+		rtu.RTUClientHandler.Timeout = m.timeout
+	}
 
 	if err := h.Connect(); err != nil {
 		return nil, err
@@ -95,7 +132,7 @@ func (m *Manager) ensurePort(path string) (*portClient, error) {
 	p := &portClient{
 		path:           path,
 		handler:        h,
-		client:         modbus.NewClient(h),
+		client:         m.clientFactory(h),
 		operationDelay: m.operationDelay,
 	}
 	m.ports[path] = p

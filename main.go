@@ -24,6 +24,12 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// For testing purposes
+var (
+	execCommand        = exec.Command
+	execCommandContext = exec.CommandContext
+)
+
 //go:embed src/web/templates/*
 var templateFS embed.FS
 
@@ -159,7 +165,7 @@ func (app *App) rescanWiFiHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Trigger a rescan in the background so we don't block the request
 	go func() {
-		cmd := exec.Command("nmcli", "device", "wifi", "rescan")
+		cmd := execCommand("nmcli", "device", "wifi", "rescan")
 		if err := cmd.Run(); err != nil {
 			log.Printf("Background WiFi rescan failed: %v", err)
 		}
@@ -456,13 +462,13 @@ func (app *App) rebootHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Reboot requested on %s system", runtime.GOOS)
 
 	// Use systemctl if available (systemd systems)
-	cmd := exec.Command("systemctl", "reboot", "-i")
+	cmd := execCommand("systemctl", "reboot", "-i")
 	if err := cmd.Run(); err != nil {
 		// Fallback to reboot command
-		cmd = exec.Command("reboot")
+		cmd = execCommand("reboot")
 		if err := cmd.Run(); err != nil {
 			// Last resort: shutdown -r now
-			cmd = exec.Command("shutdown", "-r", "now")
+			cmd = execCommand("shutdown", "-r", "now")
 			if err := cmd.Run(); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				json.NewEncoder(w).Encode(map[string]string{
@@ -532,7 +538,7 @@ func listWiFiNetworks(ctx context.Context) ([]WiFiNetwork, error) {
 	// We use --rescan no to avoid blocking if possible, although standard list command
 	// might still block if daemon is busy.
 	// Using CommandContext allows the request to be cancelled if the user navigates away.
-	cmd := exec.CommandContext(ctx, "nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list")
+	cmd := execCommandContext(ctx, "nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list")
 	output, err := cmd.Output()
 	if err != nil {
 		// If context was cancelled, return that error
@@ -546,7 +552,7 @@ func listWiFiNetworks(ctx context.Context) ([]WiFiNetwork, error) {
 }
 
 func getSavedWiFiNetworks(ctx context.Context) ([]SavedNetwork, error) {
-	cmd := exec.CommandContext(ctx, "nmcli", "-t", "-f", "NAME,UUID,TYPE,DEVICE,ACTIVE", "connection", "show")
+	cmd := execCommandContext(ctx, "nmcli", "-t", "-f", "NAME,UUID,TYPE,DEVICE,ACTIVE", "connection", "show")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get saved networks: %v", err)
@@ -642,7 +648,7 @@ func normalizeSecurityType(security string) string {
 func getCurrentWiFi(ctx context.Context) (*CurrentWiFi, error) {
 	// Get current WiFi connection using nmcli
 	// Using CommandContext to allow cancellation
-	cmd := exec.CommandContext(ctx, "nmcli", "-t", "-f", "ACTIVE,SSID,SIGNAL,SECURITY", "dev", "wifi")
+	cmd := execCommandContext(ctx, "nmcli", "-t", "-f", "ACTIVE,SSID,SIGNAL,SECURITY", "dev", "wifi")
 	output, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() != nil {
@@ -692,13 +698,13 @@ func connectToWiFi(ssid, password, security string) error {
 	switch security {
 	case "Open":
 		// Connect to open network
-		cmd = exec.Command("nmcli", "dev", "wifi", "connect", ssid)
+		cmd = execCommand("nmcli", "dev", "wifi", "connect", ssid)
 	case "WEP":
 		// Connect to WEP network
-		cmd = exec.Command("nmcli", "dev", "wifi", "connect", ssid, "password", password)
+		cmd = execCommand("nmcli", "dev", "wifi", "connect", ssid, "password", password)
 	case "WPA", "WPA2", "WPA3":
 		// Connect to WPA network
-		cmd = exec.Command("nmcli", "dev", "wifi", "connect", ssid, "password", password)
+		cmd = execCommand("nmcli", "dev", "wifi", "connect", ssid, "password", password)
 	default:
 		return fmt.Errorf("unsupported security type: %s", security)
 	}
@@ -714,11 +720,11 @@ func connectToWiFi(ssid, password, security string) error {
 func getProcesses() ([]Process, error) {
 	// Use ps command to get process information
 	// This is the most reliable cross-platform way to get process info
-	cmd := exec.Command("ps", "aux")
+	cmd := execCommand("ps", "aux")
 	output, err := cmd.Output()
 	if err != nil {
 		// Fallback to ps -ef if ps aux fails
-		cmd = exec.Command("ps", "-ef")
+		cmd = execCommand("ps", "-ef")
 		output, err = cmd.Output()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get process list: %v", err)
