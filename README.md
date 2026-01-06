@@ -44,6 +44,9 @@ cd control-mate-utils
 # Install Node.js dependencies
 npm install
 
+# Development mode (watch CSS changes)
+npm run dev
+
 # Build everything (CSS + Go binary)
 npm run build
 ```
@@ -58,9 +61,6 @@ npm run build-css
 
 # Build Go binary only
 npm run build-go
-
-# Development mode (watch CSS changes)
-npm run dev
 
 # Clean build artifacts
 npm run clean
@@ -82,13 +82,13 @@ build/
 
 ## Usage
 
-### Running the Application
+### Running the Application on Linux
 ```bash
-# Deploy: Copy only the binary to target system
-scp ./build/control-mate-utils-linux-arm64 user@target:~
+# Add permissions for development
+sudo setcap 'cap_net_raw,cap_net_admin=eip' ./release/cm-utils-linux-arm64
 
-# Run the application (requires root privileges for WiFi operations)
-sudo ./release/control-mate-utils-linux-arm64
+# Run the application
+sudo ./release/cm-utils-linux-arm64
 
 # The web interface will be available at http://localhost:8080
 ```
@@ -130,16 +130,29 @@ curl -X POST http://localhost:8080/api/wifi/connect \
 
 ```
 control-mate-utils/
-├── main.go                 # Main application code
-├── go.mod                  # Go module file
-├── templates/
-│   └── index.html         # HTML template
-├── static/
-│   ├── css/
-│   │   └── styles.css     # Shadcn UI styles
-│   └── js/
-│       └── app.js         # Frontend JavaScript
-└── README.md              # This file
+├── src/
+│   ├── main.go                    # Main application code
+│   ├── server/
+│   │   ├── discovery/             # Discovery agent
+│   │   │   └── agent.go
+│   │   └── extension/             # Extension card management
+│   │       ├── index.go
+│   │       ├── manager.go
+│   │       ├── models.go
+│   │       └── port.go
+│   └── web/
+│       ├── static/
+│       │   ├── app.js             # Frontend JavaScript
+│       │   └── styles.css         # Tailwind CSS source
+│       ├── templates/             # HTML templates
+│       │   ├── extension.html
+│       │   ├── index.html
+│       │   ├── processes.html
+│       │   └── system.html
+│       └── styles.css
+├── go.mod                          # Go module file
+├── package.json                   # Node.js dependencies
+└── README.md                      # This file
 ```
 
 ## Deployment

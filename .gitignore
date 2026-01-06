@@ -19,6 +19,7 @@ dist/
 release/
 control-mate-utils
 control-mate-utils-linux-arm64
+tmp/
 
 # Tailwind CSS build cache
 .tailwindcss-cache/

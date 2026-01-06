@@ -17,12 +17,14 @@ import (
 	"strings"
 	"time"
 
-	"control-mate-utils/extension"
+	"control-mate-utils/src/server"
+	"control-mate-utils/src/server/discovery"
+	"control-mate-utils/src/server/extension"
 
 	"github.com/gorilla/mux"
 )
 
-//go:embed src/templates/*
+//go:embed src/web/templates/*
 var templateFS embed.FS
 
 //go:embed build/static/*
@@ -94,12 +96,6 @@ type App struct {
 
 var nmcliAvailable bool
 
-func checkNmcliAvailable() bool {
-	cmd := exec.Command("which", "nmcli")
-	err := cmd.Run()
-	return err == nil
-}
-
 func readVersion() string {
 	data, err := staticFS.ReadFile("build/static/version.txt")
 	if err != nil {
@@ -110,8 +106,8 @@ func readVersion() string {
 }
 
 func NewApp() *App {
-	templates := template.Must(template.ParseFS(templateFS, "src/templates/*.html"))
-	nmcliAvailable = checkNmcliAvailable()
+	templates := template.Must(template.ParseFS(templateFS, "src/web/templates/*.html"))
+	nmcliAvailable = server.CheckNmcliAvailable()
 	version := readVersion()
 
 	// Initialize extension manager
@@ -265,11 +261,11 @@ func (app *App) getSystemHealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// Check network connectivity
-	networkCheck := checkNetworkConnectivity()
+	networkCheck := server.CheckNetworkConnectivity()
 
 	// Calculate uptime
 	uptime := time.Since(app.startTime)
-	uptimeStr := formatUptime(uptime)
+	uptimeStr := server.FormatUptime(uptime)
 
 	// Determine overall status
 	status := "online"
@@ -824,34 +820,12 @@ func parsePsEfOutput(output string) ([]Process, error) {
 	return processes, nil
 }
 
-func checkNetworkConnectivity() bool {
-	// Try to connect to a reliable external service with a short timeout
-	conn, err := net.DialTimeout("tcp", "8.8.8.8:53", 3*time.Second)
-	if err != nil {
-		return false
-	}
-	conn.Close()
-	return true
-}
-
-func formatUptime(duration time.Duration) string {
-	totalSeconds := int(duration.Seconds())
-	days := totalSeconds / 86400
-	hours := (totalSeconds % 86400) / 3600
-	minutes := (totalSeconds % 3600) / 60
-
-	if days > 0 {
-		return fmt.Sprintf("%dd %dh %dm", days, hours, minutes)
-	} else if hours > 0 {
-		return fmt.Sprintf("%dh %dm", hours, minutes)
-	} else {
-		return fmt.Sprintf("%dm", minutes)
-	}
-}
-
 func main() {
 	// Set process title for better identification in process lists
 	os.Args[0] = "cm-utils"
+
+	// Start discovery agent
+	discovery.Start()
 
 	app := NewApp()
 
@@ -888,3 +862,4 @@ func main() {
 	fmt.Println("ControlMate Utils starting on :9080")
 	log.Fatal(http.ListenAndServe(":9080", r))
 }
+
