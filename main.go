@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"control-mate-utils/extension"
+
 	"github.com/gorilla/mux"
 )
 
@@ -87,6 +89,7 @@ type App struct {
 	nmcliAvailable bool
 	version        string
 	startTime      time.Time
+	extensionMgr   *extension.Manager
 }
 
 var nmcliAvailable bool
@@ -110,11 +113,16 @@ func NewApp() *App {
 	templates := template.Must(template.ParseFS(templateFS, "src/templates/*.html"))
 	nmcliAvailable = checkNmcliAvailable()
 	version := readVersion()
+
+	// Initialize extension manager
+	extMgr := extension.InitializeManager()
+
 	return &App{
 		templates:      templates,
 		nmcliAvailable: nmcliAvailable,
 		version:        version,
 		startTime:      time.Now(),
+		extensionMgr:   extMgr,
 	}
 }
 
@@ -297,6 +305,131 @@ func (app *App) systemHandler(w http.ResponseWriter, r *http.Request) {
 		PageContent: "system",
 	}
 	app.templates.ExecuteTemplate(w, "system.html", data)
+}
+
+func (app *App) extensionHandler(w http.ResponseWriter, r *http.Request) {
+	data := TemplateData{
+		Title:       "Extensions - ControlMate Utils",
+		ActiveNav:   "extensions",
+		Version:     app.version,
+		PageContent: "extensions",
+	}
+	app.templates.ExecuteTemplate(w, "extension.html", data)
+}
+
+func (app *App) rediscoverExtensionCardsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Stop existing manager cycle if present
+	if app.extensionMgr != nil {
+		app.extensionMgr.StopCycle()
+	}
+
+	// Re-initialize manager (performs auto-discovery and conditionally starts cycle)
+	app.extensionMgr = extension.InitializeManager()
+
+	// Return current cards after rediscovery
+	cards := app.extensionMgr.RefreshAll()
+	json.NewEncoder(w).Encode(map[string]interface{}{"cards": cards})
+}
+
+func (app *App) getExtensionCardsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	cards := app.extensionMgr.RefreshAll()
+	json.NewEncoder(w).Encode(map[string]interface{}{"cards": cards})
+}
+
+func (app *App) extensionCardHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	cardID := vars["id"]
+
+	_, ok := app.extensionMgr.GetCard(cardID)
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "card not found"})
+		return
+	}
+
+	path := r.URL.Path
+	switch {
+	case strings.HasSuffix(path, "/write-do"):
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Index int  `json:"index"`
+			State bool `json:"state"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid body"})
+			return
+		}
+		if err := app.extensionMgr.QueueWriteDO(cardID, req.Index, req.State); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+
+	case strings.HasSuffix(path, "/write-ao"):
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Index int     `json:"index"`
+			Value float32 `json:"value"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid body"})
+			return
+		}
+		if err := app.extensionMgr.QueueWriteAO(cardID, req.Index, req.Value); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+
+	case strings.HasSuffix(path, "/write-aotype"):
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Index int    `json:"index"`
+			Mode  string `json:"mode"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid body"})
+			return
+		}
+		if err := app.extensionMgr.QueueWriteAOType(cardID, req.Index, req.Mode); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+
+	case strings.HasSuffix(path, "/reboot"):
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if err := app.extensionMgr.RebootCard(cardID); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+
+	default:
+		w.WriteHeader(http.StatusNotFound)
+	}
 }
 
 func (app *App) getProcessesHandler(w http.ResponseWriter, r *http.Request) {
@@ -733,6 +866,7 @@ func main() {
 	r.HandleFunc("/", app.homeHandler).Methods("GET")
 	r.HandleFunc("/processes", app.processesHandler).Methods("GET")
 	r.HandleFunc("/system", app.systemHandler).Methods("GET")
+	r.HandleFunc("/extensions", app.extensionHandler).Methods("GET")
 	r.HandleFunc("/api/version", app.getVersionHandler).Methods("GET")
 	r.HandleFunc("/api/health", app.getSystemHealthHandler).Methods("GET")
 	r.HandleFunc("/api/nmcli/status", app.getNmcliStatusHandler).Methods("GET")
@@ -744,6 +878,12 @@ func main() {
 	r.HandleFunc("/api/wifi/connect", app.connectWiFiHandler).Methods("POST")
 	r.HandleFunc("/api/processes", app.getProcessesHandler).Methods("GET")
 	r.HandleFunc("/api/system/reboot", app.rebootHandler).Methods("POST")
+	r.HandleFunc("/api/extension/cards", app.getExtensionCardsHandler).Methods("GET")
+	r.HandleFunc("/api/extension/cards/rediscover", app.rediscoverExtensionCardsHandler).Methods("POST")
+	r.HandleFunc("/api/extension/cards/{id}/write-do", app.extensionCardHandler).Methods("POST")
+	r.HandleFunc("/api/extension/cards/{id}/write-ao", app.extensionCardHandler).Methods("POST")
+	r.HandleFunc("/api/extension/cards/{id}/write-aotype", app.extensionCardHandler).Methods("POST")
+	r.HandleFunc("/api/extension/cards/{id}/reboot", app.extensionCardHandler).Methods("POST")
 
 	fmt.Println("ControlMate Utils starting on :9080")
 	log.Fatal(http.ListenAndServe(":9080", r))

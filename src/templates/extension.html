@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body class="bg-background text-foreground">
+    <div class="min-h-screen bg-background">
+        <!-- Mobile overlay -->
+        <div id="mobileOverlay" class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden hidden"></div>
+        
+        <!-- Sidebar -->
+        <div id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-sidebar-background border-r border-sidebar-border transform -translate-x-full transition-transform duration-300 ease-in-out lg:translate-x-0">
+            <div class="flex h-full flex-col">
+                <div class="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
+                    <div class="flex items-center space-x-2">
+                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary">
+                            <i data-lucide="cpu" class="h-4 w-4 text-sidebar-primary-foreground"></i>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-semibold text-sidebar-foreground">ControlMate</span>
+                            <span class="text-xs text-sidebar-foreground/70">System Utils</span>
+                        </div>
+                    </div>
+                    <button id="closeSidebar" class="lg:hidden p-1 rounded-md hover:bg-sidebar-accent" aria-label="Close sidebar">
+                        <i data-lucide="x" class="h-5 w-5 text-sidebar-foreground"></i>
+                    </button>
+                </div>
+                <nav class="flex-1 space-y-1 p-4">
+                    <a href="/" class="sidebar-nav-item">
+                        <i data-lucide="network" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Network Manager</span>
+                    </a>
+                    <a href="/processes" class="sidebar-nav-item">
+                        <i data-lucide="activity" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Processes</span>
+                    </a>
+                    <a href="/system" class="sidebar-nav-item">
+                        <i data-lucide="settings" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>System</span>
+                    </a>
+                    <a href="/extensions" class="sidebar-nav-item active" aria-current="page">
+                        <i data-lucide="cpu" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Extensions</span>
+                    </a>
+                </nav>
+                <div class="border-t border-sidebar-border p-4">
+                    <button id="themeToggle" class="sidebar-nav-item w-full" aria-label="Toggle dark mode">
+                        <i data-lucide="moon" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Dark Mode</span>
+                    </button>
+                    <div class="mt-3 text-center">
+                        <span id="versionDisplay" class="text-xs text-sidebar-foreground/50">{{.Version}}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="lg:pl-64">
+            <!-- Header -->
+            <header class="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                <div class="container mx-auto px-4 lg:px-6 py-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-4">
+                            <button id="openSidebar" class="lg:hidden p-2 rounded-md hover:bg-accent" aria-label="Open sidebar">
+                                <i data-lucide="menu" class="h-5 w-5"></i>
+                            </button>
+                            <div>
+                                <h1 class="text-2xl lg:text-3xl font-bold tracking-tight">Extensions</h1>
+                                <p class="text-sm lg:text-base text-muted-foreground hidden sm:block">Monitor and control extension cards</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2 lg:space-x-4">
+                            <button id="rediscoverCards" class="btn-secondary inline-flex items-center gap-1 hidden">
+                                <i data-lucide="refresh-cw" class="h-4 w-4"></i>
+                                <span class="hidden sm:inline">Re-discover Cards</span>
+                            </button>
+                            <div class="flex items-center space-x-2 rounded-lg bg-muted px-2 lg:px-3 py-2 system-status-indicator">
+                                <div class="h-2 w-2 rounded-full bg-green-500 system-status-dot"></div>
+                                <span class="text-xs lg:text-sm font-medium hidden sm:inline system-status-text">System Online</span>
+                                <span class="text-xs lg:text-sm font-medium sm:hidden system-status-text-mobile">Online</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <main class="container mx-auto px-4 lg:px-6 py-6 lg:py-8">
+                <div id="app-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <!-- Cards will be populated here -->
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- AO Control Modal -->
+    <div id="aoControlModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true">
+        <div class="w-full max-w-md mx-4 border bg-background p-4 lg:p-6 shadow-xl rounded-xl animate-scale-in">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h3 id="aoModalTitle" class="text-lg font-semibold leading-none tracking-tight">Set Analog Output</h3>
+                    <p class="text-sm text-muted-foreground mt-1" id="aoModalChannel">Configure output value</p>
+                </div>
+                <button id="closeAOModal" class="p-1 rounded-md hover:bg-accent" aria-label="Close modal">
+                    <i data-lucide="x" class="h-5 w-5 text-foreground"></i>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <div class="space-y-2">
+                    <label class="text-sm font-medium">Output Type</label>
+                    <div class="flex gap-2">
+                        <button type="button" id="aoType4-20mA" class="btn-ctrl flex-1" onclick="setAOType('4-20mA')">
+                            4-20mA
+                        </button>
+                        <button type="button" id="aoType0-10V" class="btn-ctrl flex-1" onclick="setAOType('0-10V')">
+                            0-10V
+                        </button>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label for="aoModalValue" id="aoModalValueLabel" class="text-sm font-medium">Raw Value</label>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-muted-foreground">Raw</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="aoValueModeToggle" class="sr-only peer" onchange="toggleAOValueMode()">
+                                <div class="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                            </label>
+                            <span class="text-xs text-muted-foreground">Normalized</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <input type="range" id="aoModalSlider" class="range-slider flex-1" min="0" max="20000" step="1" value="4000">
+                        <input type="number" id="aoModalValue" class="form-input w-24" min="0" max="20000" step="1" value="4000">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-2 border-t">
+                    <button type="button" id="cancelAOModal" class="btn-secondary">Cancel</button>
+                    <button type="button" id="confirmAOModal" class="btn-primary">Set</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        lucide.createIcons();
+        
+        // --- STATE STORE ---
+        let stateStore = {};
+        let activeSliders = new Set();
+        let savedSliderValues = {};
+        let currentAOCardId = null;
+        let currentAOChannel = null;
+        let loadCardsPending = false; // Flag to prevent concurrent requests
+        
+        // --- DOM CACHE ---
+        let cardElements = {}; // Map of cardId -> card DOM element
+        let cardStructure = {}; // Map of cardId -> { diCount, doCount, aiCount, aoCount, module }
+
+        // --- HELPER: Format timestamp ---
+        function formatTimestamp(timestampStr) {
+            if (!timestampStr) return 'N/A';
+            try {
+                const date = new Date(timestampStr);
+                if (isNaN(date.getTime())) return 'N/A';
+                
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const day = date.getDate();
+                const month = months[date.getMonth()];
+                const year = date.getFullYear();
+                
+                let hours = date.getHours();
+                const minutes = date.getMinutes();
+                const seconds = date.getSeconds();
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12;
+                hours = hours ? hours : 12; // the hour '0' should be '12'
+                const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+                const secondsStr = seconds < 10 ? '0' + seconds : seconds;
+                
+                return `${day}-${month}-${year} ${hours}:${minutesStr}:${secondsStr} ${ampm}`;
+            } catch (e) {
+                return 'N/A';
+            }
+        }
+
+        // --- HELPER: Scale to Raw Int (0-4095) ---
+        function valToRawInt(val, maxRange) {
+            if(val === undefined || val === null) return 0;
+            let raw = Math.round((val / maxRange) * 4095);
+            return Math.max(0, Math.min(4095, raw));
+        }
+
+        // --- HELPER: Convert raw 12-bit value to integer ---
+        function rawToInt(val, maxRange) {
+            if(val === undefined || val === null) return 0;
+            // Convert float32 value to raw 12-bit integer (0-4095)
+            let raw = Math.round((val / maxRange) * 4095);
+            return Math.max(0, Math.min(4095, raw));
+        }
+
+        // --- RENDERER ---
+        function getCardStructure(card) {
+            return {
+                diCount: (card.last && card.last.di) ? card.last.di.length : 0,
+                doCount: (card.last && card.last.do) ? card.last.do.length : 0,
+                aiCount: (card.last && card.last.ai) ? card.last.ai.length : 0,
+                aoCount: (card.last && card.last.ao) ? card.last.ao.length : 0,
+                module: card.module || ''
+            };
+        }
+
+        function hasStructureChanged(cardId, newStructure) {
+            const oldStructure = cardStructure[cardId];
+            if (!oldStructure) return true;
+            return oldStructure.diCount !== newStructure.diCount ||
+                   oldStructure.doCount !== newStructure.doCount ||
+                   oldStructure.aiCount !== newStructure.aiCount ||
+                   oldStructure.aoCount !== newStructure.aoCount ||
+                   oldStructure.module !== newStructure.module;
+        }
+
+        function createCardElement(card) {
+            const cardEl = document.createElement('div');
+            cardEl.className = 'io-card';
+            cardEl.setAttribute('data-card-id', card.id);
+            
+            const sn = (card.last && card.last.serialNumber) ? card.last.serialNumber : 'N/A';
+            const timestamp = (card.last && card.last.timestamp) 
+                ? formatTimestamp(card.last.timestamp) 
+                : 'N/A';
+            let html = `
+                <div class="card-header">
+                    <div class="flex-1">
+                        <div class="card-title">Card ${card.id}</div>
+                        <div class="card-model">ID: ${card.id} &bull; ${card.module.replace('USR-', '')}</div>
+                        <div class="card-sn">SN: ${sn}</div>
+                        <div class="card-timestamp">Updated: ${timestamp}</div>
+                    </div>
+                    <button class="btn-reboot" onclick="rebootCard('${card.id}')" title="Reboot Card">
+                        <i data-lucide="power" class="h-4 w-4"></i>
+                    </button>
+                </div>
+                <div class="card-body">`;
+
+            // --- DI ---
+            if (card.last && card.last.di && card.last.di.length > 0) {
+                html += `<div class="section-title">Digital Inputs</div><div class="do-list">`;
+                    card.last.di.forEach((val, i) => {
+                    html += `
+                    <div class="do-item ${val ? 'do-item-on' : 'do-item-off'}" data-di-index="${i}">
+                        <div class="do-info">
+                            <div class="led ${val ? 'active' : ''}"></div>
+                            <span class="do-name">DI-${i + 1}</span>
+                        </div>
+                        <div class="val-display di-val-display" style="width: 60px; margin-left: auto; text-align: center;">
+                            <span class="di-state ${val ? 'di-state-on' : 'di-state-off'}">${val ? 'ON' : 'OFF'}</span>
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+
+            // --- DO ---
+            if (card.last && card.last.do && card.last.do.length > 0) {
+                html += `<div class="section-title">Digital Outputs</div><div class="do-list">`;
+                card.last.do.forEach((val, i) => {
+                    html += `
+                    <div class="do-item ${val ? 'do-item-on' : 'do-item-off'}" data-do-index="${i}">
+                        <div class="do-info">
+                            <div class="led ${val ? 'active' : ''}"></div>
+                            <span class="do-name">DO-${i+1}</span>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn-ctrl ${val ? 'active-on' : ''}" 
+                                onclick="updateDO('${card.id}', ${i}, true)">ON</button>
+                            <button class="btn-ctrl ${!val ? 'active-off' : ''}" 
+                                onclick="updateDO('${card.id}', ${i}, false)">OFF</button>
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+
+            // --- AI ---
+            if (card.last && card.last.ai && card.last.ai.length > 0) {
+                html += `<div class="section-title">Analog Inputs</div><div class="ai-list">`;
+                card.last.ai.forEach((val, i) => {
+                    const current = val / 1000;
+                    const pct = Math.max(0, Math.min(100, ((current / 20) * 100)));
+                    
+                    html += `
+                    <div class="ai-item" data-ai-index="${i}">
+                        <div class="ai-info">
+                            <span class="ai-name" style="min-width: 60px;">AI-${i+1}</span>
+                            <span class="raw-badge">${current.toFixed(2)}mA</span>
+                        </div>
+                        <div class="val-display">
+                            <span class="val-main">${Math.round(val)}</span>
+                        </div>
+                        <div class="bar-bg ai-bar">
+                            <div class="bar-fill bg-orange-500" style="width:${pct}%"></div>
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+
+            // --- AO ---
+            if (card.last && card.last.ao && card.last.ao.length > 0) {
+                html += `<div class="section-title">Analog Outputs</div><div class="do-list">`;
+                card.last.ao.forEach((val, i) => {
+                    const raw = Math.round(val);
+                    const aoType = (card.last.aoType && card.last.aoType[i]) ? card.last.aoType[i] : '4-20mA';
+                    
+                    let normalized = 0;
+                    let unit = '';
+                    if (aoType === '0-10V') {
+                        // Raw range: 0-10000, Normalized: 0-10V
+                        normalized = (raw / 10000) * 10;
+                        unit = 'V';
+                    } else {
+                        // Raw range: 4000-20000, Normalized: 4-20mA
+                        normalized = ((raw - 4000) / 16000) * 16 + 4;
+                        unit = 'mA';
+                    }
+                    
+                    html += `
+                    <div class="do-item" data-ao-index="${i}">
+                        <div class="do-info">
+                            <span class="do-name" style="min-width: 60px;">AO-${i+1}</span>
+                            <span class="raw-badge">${normalized.toFixed(2)}${unit}</span>
+                        </div>
+                        <div class="btn-group" style="align-items: center; gap: 8px;">
+                            <span class="val-main" style="display: inline-block; margin-right: 0;">${raw}</span>
+                            <button class="btn-ctrl text-xs px-2 py-1" onclick="showAOControlModal('${card.id}', ${i})">SET</button>
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+            cardEl.innerHTML = html;
+            return cardEl;
+        }
+
+        function updateCardValues(cardId, card) {
+            const cardEl = cardElements[cardId];
+            if (!cardEl || !card.last) return;
+
+            // Update card header with SN and timestamp
+            const cardHeader = cardEl.querySelector('.card-header');
+            if (cardHeader) {
+                const sn = (card.last && card.last.serialNumber) ? card.last.serialNumber : 'N/A';
+                const timestamp = (card.last && card.last.timestamp) 
+                    ? formatTimestamp(card.last.timestamp) 
+                    : 'N/A';
+                const cardModel = cardHeader.querySelector('.card-model');
+                const cardSN = cardHeader.querySelector('.card-sn');
+                const cardTimestamp = cardHeader.querySelector('.card-timestamp');
+                if (cardModel) {
+                    cardModel.textContent = `ID: ${card.id} • ${card.module.replace('USR-', '')}`;
+                }
+                if (cardSN) {
+                    cardSN.textContent = `SN: ${sn}`;
+                }
+                if (cardTimestamp) {
+                    cardTimestamp.textContent = `Updated: ${timestamp}`;
+                }
+            }
+
+            // Update DI values
+            if (card.last.di) {
+                card.last.di.forEach((val, i) => {
+                    const diItem = cardEl.querySelector(`[data-di-index="${i}"]`);
+                    if (diItem) {
+                        diItem.className = `do-item ${val ? 'do-item-on' : 'do-item-off'}`;
+                        const led = diItem.querySelector('.led');
+                        if (led) led.className = `led ${val ? 'active' : ''}`;
+                        const diState = diItem.querySelector('.di-state');
+                        if (diState) {
+                            diState.textContent = val ? 'ON' : 'OFF';
+                            diState.className = `di-state ${val ? 'di-state-on' : 'di-state-off'}`;
+                        }
+                    }
+                });
+            }
+
+            // Update DO values
+            if (card.last.do) {
+                card.last.do.forEach((val, i) => {
+                    const doItem = cardEl.querySelector(`[data-do-index="${i}"]`);
+                    if (doItem) {
+                        doItem.className = `do-item ${val ? 'do-item-on' : 'do-item-off'}`;
+                        const led = doItem.querySelector('.led');
+                        if (led) led.className = `led ${val ? 'active' : ''}`;
+                        const onBtn = doItem.querySelector('.btn-group button:first-child');
+                        const offBtn = doItem.querySelector('.btn-group button:last-child');
+                        if (onBtn) onBtn.className = `btn-ctrl ${val ? 'active-on' : ''}`;
+                        if (offBtn) offBtn.className = `btn-ctrl ${!val ? 'active-off' : ''}`;
+                    }
+                });
+            }
+
+            // Update AI values
+            if (card.last.ai) {
+                card.last.ai.forEach((val, i) => {
+                    const aiItem = cardEl.querySelector(`[data-ai-index="${i}"]`);
+                    if (aiItem) {
+                        const current = val / 1000;
+                        const pct = Math.max(0, Math.min(100, ((current / 20) * 100)));
+                        const rawBadge = aiItem.querySelector('.raw-badge');
+                        const valMain = aiItem.querySelector('.val-main');
+                        const barFill = aiItem.querySelector('.bar-fill');
+                        if (rawBadge) rawBadge.textContent = `${current.toFixed(2)}mA`;
+                        if (valMain) valMain.textContent = Math.round(val);
+                        if (barFill) barFill.style.width = `${pct}%`;
+                    }
+                });
+            }
+
+            // Update AO values
+            if (card.last.ao) {
+                card.last.ao.forEach((val, i) => {
+                    const aoItem = cardEl.querySelector(`[data-ao-index="${i}"]`);
+                    if (aoItem) {
+                        const raw = Math.round(val);
+                        const aoType = (card.last.aoType && card.last.aoType[i]) ? card.last.aoType[i] : '4-20mA';
+                        let normalized = 0;
+                        let unit = '';
+                        if (aoType === '0-10V') {
+                            // Raw range: 0-10000, Normalized: 0-10V
+                            normalized = (raw / 10000) * 10;
+                            unit = 'V';
+                        } else {
+                            // Raw range: 4000-20000, Normalized: 4-20mA
+                            normalized = ((raw - 4000) / 16000) * 16 + 4;
+                            unit = 'mA';
+                        }
+                        const rawBadge = aoItem.querySelector('.raw-badge');
+                        const valMain = aoItem.querySelector('.val-main');
+                        if (rawBadge) rawBadge.textContent = `${normalized.toFixed(2)}${unit}`;
+                        if (valMain) valMain.textContent = raw;
+                    }
+                });
+            }
+        }
+
+        function renderDashboard() {
+            const container = document.getElementById('app-container');
+            const currentCardIds = new Set(Object.keys(stateStore));
+            const existingCardIds = new Set(Object.keys(cardElements));
+
+            // Remove cards that no longer exist
+            existingCardIds.forEach(cardId => {
+                if (!currentCardIds.has(cardId)) {
+                    const cardEl = cardElements[cardId];
+                    if (cardEl && cardEl.parentNode) {
+                        cardEl.parentNode.removeChild(cardEl);
+                    }
+                    delete cardElements[cardId];
+                    delete cardStructure[cardId];
+                }
+            });
+
+            // Add or update cards
+            Object.keys(stateStore).forEach(cardId => {
+                const card = stateStore[cardId];
+                const newStructure = getCardStructure(card);
+                const needsRebuild = !cardElements[cardId] || hasStructureChanged(cardId, newStructure);
+
+                if (needsRebuild) {
+                    // Remove old element if exists
+                    if (cardElements[cardId]) {
+                        const oldEl = cardElements[cardId];
+                        if (oldEl.parentNode) {
+                            oldEl.parentNode.removeChild(oldEl);
+                        }
+                    }
+
+                    // Create new element
+                    const cardEl = createCardElement(card);
+                    container.appendChild(cardEl);
+                    cardElements[cardId] = cardEl;
+                    cardStructure[cardId] = newStructure;
+                    lucide.createIcons();
+                } else {
+                    // Just update values
+                    updateCardValues(cardId, card);
+                }
+            });
+        }
+
+        // --- INTERACTION LOGIC ---
+        
+        function showNotification(message, type = 'info') {
+            // Remove existing notifications
+            const existingNotifications = document.querySelectorAll('.notification');
+            existingNotifications.forEach(notif => {
+                notif.classList.add('animate-slide-out');
+                setTimeout(() => {
+                    if (notif.parentElement) {
+                        notif.remove();
+                    }
+                }, 300);
+            });
+            
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            
+            const iconMap = {
+                'success': 'check-circle',
+                'error': 'x-circle',
+                'info': 'info'
+            };
+            
+            notification.innerHTML = `
+                <div class="flex items-center space-x-3">
+                    <div class="flex-shrink-0">
+                        <i data-lucide="${iconMap[type]}" class="h-5 w-5" aria-hidden="true"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-sm font-medium">${message}</p>
+                    </div>
+                    <button class="flex-shrink-0 ml-2 text-current opacity-70 hover:opacity-100 transition-opacity" onclick="this.parentElement.parentElement.remove()" aria-label="Close notification">
+                        <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            lucide.createIcons();
+            
+            // Animate in
+            requestAnimationFrame(() => {
+                notification.classList.add('animate-slide-in');
+            });
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                notification.classList.add('animate-slide-out');
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.remove();
+                    }
+                }, 300);
+            }, 5000);
+        }
+        
+        function updateDO(cardId, channel, newVal) {
+            const state = newVal ? 'ON' : 'OFF';
+            showNotification(`Card ${cardId} - DO-${channel+1}: ${state} request sent`, 'info');
+            fetch(`/api/extension/cards/${cardId}/write-do`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ index: channel, state: newVal })
+            })
+            .then(() => loadCards())
+            .catch(err => {
+                console.error('Error updating DO:', err);
+                showNotification(`Card ${cardId} - Failed to update DO-${channel+1}`, 'error');
+            });
+        }
+
+        window.showAOControlModal = function(cardId, channel) {
+            currentAOCardId = cardId;
+            currentAOChannel = channel;
+            const card = stateStore[cardId];
+            const val = card.last.ao[channel];
+            const raw = Math.round(val);
+            const setpoint = (card.aoSetpoints && card.aoSetpoints[channel] !== undefined) 
+                ? card.aoSetpoints[channel] 
+                : raw;
+            const currentAOType = (card.last.aoType && card.last.aoType[channel]) ? card.last.aoType[channel] : '4-20mA';
+            
+            // Reset to normalized mode when opening modal (default)
+            aoValueMode = 'normalized';
+            const toggle = document.getElementById('aoValueModeToggle');
+            if (toggle) toggle.checked = true;
+            
+            document.getElementById('aoModalTitle').textContent = `Card ${cardId} - AO-${channel+1}`;
+            document.getElementById('aoModalChannel').textContent = `Current: ${raw} | Target: ${Math.round(setpoint)}`;
+            
+            // Update AO type buttons (this will also update value display if needed)
+            updateAOTypeButtons(currentAOType);
+            
+            // Set initial values - convert to normalized since that's the default mode
+            const slider = document.getElementById('aoModalSlider');
+            const input = document.getElementById('aoModalValue');
+            const rawRange = getRawRange(currentAOType);
+            // Clamp setpoint to valid range
+            const clampedSetpoint = Math.max(rawRange.min, Math.min(rawRange.max, Math.round(setpoint)));
+            // Convert to normalized for display
+            const normalizedValue = rawToNormalized(clampedSetpoint, currentAOType);
+            slider.value = normalizedValue.toFixed(2);
+            input.value = normalizedValue.toFixed(2);
+            updateAOValueDisplay();
+            
+            const modal = document.getElementById('aoControlModal');
+            modal.classList.remove('hidden');
+            
+            // Sync slider and input
+            slider.oninput = function() {
+                if (aoValueMode === 'normalized') {
+                    input.value = parseFloat(this.value).toFixed(2);
+                } else {
+                    input.value = this.value;
+                }
+            };
+            
+            input.oninput = function() {
+                let val = parseFloat(this.value);
+                if (isNaN(val)) {
+                    val = aoValueMode === 'normalized' 
+                        ? (currentAOType === '0-10V' ? 0 : 4)
+                        : 4000;
+                }
+                
+                if (aoValueMode === 'normalized') {
+                    const min = currentAOType === '0-10V' ? 0 : 4;
+                    const max = currentAOType === '0-10V' ? 10 : 20;
+                    if (val < min) val = min;
+                    if (val > max) val = max;
+                    slider.value = val.toFixed(2);
+                    this.value = val.toFixed(2);
+                } else {
+                    if (val < 4000) val = 4000;
+                    if (val > 20000) val = 20000;
+                    slider.value = val;
+                    this.value = val;
+                }
+            };
+            
+            lucide.createIcons();
+        };
+
+        let currentAOType = '4-20mA';
+        let aoValueMode = 'normalized'; // 'raw' or 'normalized' - default to normalized
+
+        function updateAOTypeButtons(selectedType) {
+            currentAOType = selectedType;
+            const btn4_20 = document.getElementById('aoType4-20mA');
+            const btn0_10 = document.getElementById('aoType0-10V');
+            
+            if (btn4_20 && btn0_10) {
+                if (selectedType === '4-20mA') {
+                    btn4_20.classList.add('active-on');
+                    btn0_10.classList.remove('active-on');
+                } else {
+                    btn0_10.classList.add('active-on');
+                    btn4_20.classList.remove('active-on');
+                }
+            }
+            
+            // Update value display (both raw and normalized modes need updating)
+            updateAOValueDisplay();
+        }
+
+        function rawToNormalized(raw, aoType) {
+            if (aoType === '0-10V') {
+                // Raw range: 0-10000, Normalized: 0-10V
+                return (raw / 10000) * 10;
+            } else { // 4-20mA
+                // Raw range: 4000-20000, Normalized: 4-20mA
+                return ((raw - 4000) / 16000) * 16 + 4;
+            }
+        }
+
+        function normalizedToRaw(normalized, aoType) {
+            if (aoType === '0-10V') {
+                // Raw range: 0-10000, Normalized: 0-10V
+                return Math.round((normalized / 10) * 10000);
+            } else { // 4-20mA
+                // Raw range: 4000-20000, Normalized: 4-20mA
+                return Math.round(((normalized - 4) / 16) * 16000 + 4000);
+            }
+        }
+
+        function getRawRange(aoType) {
+            if (aoType === '0-10V') {
+                return { min: 0, max: 10000 };
+            } else { // 4-20mA
+                return { min: 4000, max: 20000 };
+            }
+        }
+
+        function updateAOValueDisplay() {
+            const slider = document.getElementById('aoModalSlider');
+            const input = document.getElementById('aoModalValue');
+            const label = document.getElementById('aoModalValueLabel');
+            
+            if (!slider || !input || !label) return;
+            
+            const rawRange = getRawRange(currentAOType);
+            const currentRaw = parseInt(slider.value) || rawRange.min;
+            
+            if (aoValueMode === 'normalized') {
+                const normalized = rawToNormalized(currentRaw, currentAOType);
+                const unit = currentAOType === '0-10V' ? 'V' : 'mA';
+                const minNorm = currentAOType === '0-10V' ? 0 : 4;
+                const maxNorm = currentAOType === '0-10V' ? 10 : 20;
+                
+                label.textContent = `Normalized Value (${minNorm}-${maxNorm}${unit})`;
+                slider.min = minNorm;
+                slider.max = maxNorm;
+                slider.step = 0.01;
+                slider.value = normalized.toFixed(2);
+                input.min = minNorm;
+                input.max = maxNorm;
+                input.step = 0.01;
+                input.value = normalized.toFixed(2);
+            } else {
+                label.textContent = `Raw Value (${rawRange.min}-${rawRange.max})`;
+                slider.min = rawRange.min;
+                slider.max = rawRange.max;
+                slider.step = 1;
+                slider.value = currentRaw;
+                input.min = rawRange.min;
+                input.max = rawRange.max;
+                input.step = 1;
+                input.value = currentRaw;
+            }
+        }
+
+        window.toggleAOValueMode = function() {
+            const toggle = document.getElementById('aoValueModeToggle');
+            if (!toggle) return;
+            
+            const slider = document.getElementById('aoModalSlider');
+            const input = document.getElementById('aoModalValue');
+            
+            if (!slider || !input) return;
+            
+            // Get current value
+            const rawRange = getRawRange(currentAOType);
+            let currentValue = parseFloat(input.value) || rawRange.min;
+            
+            if (aoValueMode === 'raw') {
+                // Switching to normalized
+                aoValueMode = 'normalized';
+                const normalized = rawToNormalized(currentValue, currentAOType);
+                updateAOValueDisplay();
+                slider.value = normalized.toFixed(2);
+                input.value = normalized.toFixed(2);
+            } else {
+                // Switching to raw
+                aoValueMode = 'raw';
+                const raw = normalizedToRaw(currentValue, currentAOType);
+                updateAOValueDisplay();
+                slider.value = raw;
+                input.value = raw;
+            }
+            
+            // Update sync handlers
+            slider.oninput = function() {
+                if (aoValueMode === 'normalized') {
+                    input.value = parseFloat(this.value).toFixed(2);
+                } else {
+                    input.value = this.value;
+                }
+            };
+            
+            input.oninput = function() {
+                let val = parseFloat(this.value);
+                const rawRange = getRawRange(currentAOType);
+                
+                if (isNaN(val)) {
+                    val = aoValueMode === 'normalized' 
+                        ? (currentAOType === '0-10V' ? 0 : 4)
+                        : rawRange.min;
+                }
+                
+                if (aoValueMode === 'normalized') {
+                    const min = currentAOType === '0-10V' ? 0 : 4;
+                    const max = currentAOType === '0-10V' ? 10 : 20;
+                    if (val < min) val = min;
+                    if (val > max) val = max;
+                    slider.value = val.toFixed(2);
+                    this.value = val.toFixed(2);
+                } else {
+                    if (val < rawRange.min) val = rawRange.min;
+                    if (val > rawRange.max) val = rawRange.max;
+                    slider.value = val;
+                    this.value = val;
+                }
+            };
+        };
+
+        window.setAOType = function(type) {
+            if (currentAOCardId === null || currentAOChannel === null) return;
+            
+            updateAOTypeButtons(type);
+            
+            fetch(`/api/extension/cards/${currentAOCardId}/write-aotype`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ index: currentAOChannel, mode: type })
+            })
+            .then(() => {
+                showNotification(`Card ${currentAOCardId} - AO-${currentAOChannel+1} type set to ${type}`, 'info');
+                loadCards();
+            })
+            .catch(err => {
+                console.error('Error setting AO type:', err);
+                showNotification(`Card ${currentAOCardId} - Failed to set AO-${currentAOChannel+1} type`, 'error');
+            });
+        };
+
+        window.rebootCard = function(cardId) {
+            if (!confirm(`Are you sure you want to reboot Card ${cardId}?`)) {
+                return;
+            }
+            
+            showNotification(`Card ${cardId} - Reboot request sent`, 'info');
+            fetch(`/api/extension/cards/${cardId}/reboot`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            })
+            .then(() => {
+                showNotification(`Card ${cardId} - Reboot command sent successfully`, 'success');
+            })
+            .catch(err => {
+                console.error('Error rebooting card:', err);
+                showNotification(`Card ${cardId} - Failed to reboot`, 'error');
+            });
+        };
+
+        window.hideAOControlModal = function() {
+            const modal = document.getElementById('aoControlModal');
+            modal.classList.add('hidden');
+            currentAOCardId = null;
+            currentAOChannel = null;
+        };
+
+        function commitAO(cardId, channel) {
+            const input = document.getElementById('aoModalValue');
+            let rawValue;
+            
+            // Always convert to raw value, regardless of display mode
+            if (aoValueMode === 'normalized') {
+                // User is viewing normalized value, convert to raw
+                const normalizedValue = parseFloat(input.value);
+                if (isNaN(normalizedValue)) {
+                    showNotification(`Card ${cardId} - Invalid normalized value`, 'error');
+                    return;
+                }
+                rawValue = normalizedToRaw(normalizedValue, currentAOType);
+            } else {
+                // User is viewing raw value, use directly
+                rawValue = parseInt(input.value);
+                if (isNaN(rawValue)) {
+                    showNotification(`Card ${cardId} - Invalid raw value`, 'error');
+                    return;
+                }
+            }
+            
+            // Validate raw value is within expected range
+            const rawRange = getRawRange(currentAOType);
+            if (rawValue < rawRange.min || rawValue > rawRange.max) {
+                showNotification(`Card ${cardId} - Raw value ${rawValue} out of range (${rawRange.min}-${rawRange.max})`, 'error');
+                return;
+            }
+            
+            // Store setpoint for display
+            if (!stateStore[cardId].aoSetpoints) {
+                stateStore[cardId].aoSetpoints = {};
+            }
+            stateStore[cardId].aoSetpoints[channel] = rawValue;
+            
+            // Always send raw value to backend
+            showNotification(`Card ${cardId} - AO-${channel+1} write request sent (raw: ${rawValue})`, 'info');
+            fetch(`/api/extension/cards/${cardId}/write-ao`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ index: channel, value: rawValue })
+            })
+            .then(() => {
+                hideAOControlModal();
+                loadCards();
+            })
+            .catch(err => {
+                console.error('Error updating AO:', err);
+                showNotification(`Card ${cardId} - Failed to update AO-${channel+1}`, 'error');
+            });
+        }
+
+        async function loadCards() {
+            // Skip if previous request is still pending
+            if (loadCardsPending) {
+                return;
+            }
+            
+            loadCardsPending = true;
+            try {
+                const res = await fetch('/api/extension/cards');
+                const data = await res.json();
+                
+                stateStore = {};
+                (data.cards || []).forEach(card => {
+                    stateStore[card.id] = card;
+                });
+                
+                renderDashboard();
+            } catch (err) {
+                console.error('Error loading cards:', err);
+                renderDashboard();
+            } finally {
+                loadCardsPending = false;
+            }
+        }
+
+        // Modal event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            lucide.createIcons();
+            
+            // Initialize NetworkManager for version loading and other common functionality
+            if (typeof NetworkManager !== 'undefined' && !window.networkManager) {
+                window.networkManager = new NetworkManager();
+            }
+
+            // Re-detect cards button
+            const rediscoverBtn = document.getElementById('rediscoverCards');
+            if (rediscoverBtn) {
+                let rediscoverPending = false;
+                rediscoverBtn.addEventListener('click', async () => {
+                    // Skip if previous request is still pending
+                    if (rediscoverPending) {
+                        return;
+                    }
+                    
+                    // Show confirmation dialog
+                    if (!confirm('Are you sure you want to re-discover extension cards? This will reset all cards and re-detect them.')) {
+                        return;
+                    }
+                    
+                    const originalText = rediscoverBtn.querySelector('span').textContent;
+                    rediscoverBtn.disabled = true;
+                    rediscoverBtn.querySelector('span').textContent = 'Detecting...';
+                    rediscoverPending = true;
+                    try {
+                        const res = await fetch('/api/extension/cards/rediscover', { method: 'POST' });
+                        if (!res.ok) {
+                            throw new Error(`HTTP ${res.status}`);
+                        }
+                        await res.json();
+                        showNotification('Extension cards re-detected successfully', 'success');
+                        loadCards();
+                    } catch (err) {
+                        console.error('Error rediscovering cards:', err);
+                        showNotification('Failed to re-detect extension cards', 'error');
+                    } finally {
+                        rediscoverBtn.disabled = false;
+                        rediscoverBtn.querySelector('span').textContent = originalText;
+                        rediscoverPending = false;
+                    }
+                });
+            }
+
+            // Modal event listeners
+            const modal = document.getElementById('aoControlModal');
+            const closeBtn = document.getElementById('closeAOModal');
+            const cancelBtn = document.getElementById('cancelAOModal');
+            const confirmBtn = document.getElementById('confirmAOModal');
+
+            if (closeBtn) {
+                closeBtn.addEventListener('click', hideAOControlModal);
+            }
+            
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', hideAOControlModal);
+            }
+            
+            if (confirmBtn) {
+                confirmBtn.addEventListener('click', function() {
+                    if (currentAOCardId !== null && currentAOChannel !== null) {
+                        commitAO(currentAOCardId, currentAOChannel);
+                    }
+                });
+            }
+
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        hideAOControlModal();
+                    }
+                });
+            }
+        });
+
+        setInterval(loadCards, 800);
+        loadCards();
+    </script>
+</body>
+</html>
