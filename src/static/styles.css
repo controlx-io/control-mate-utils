@@ -250,6 +250,7 @@
   }
 
   .card-header {
+    @apply flex items-center justify-between gap-2;
     @apply bg-muted/50 px-5 py-4 border-b border-border;
   }
 
@@ -259,6 +260,23 @@
 
   .card-model {
     @apply text-muted-foreground text-xs font-mono mt-1;
+  }
+
+  .card-sn {
+    @apply text-muted-foreground text-xs font-mono mt-1;
+  }
+
+  .card-timestamp {
+    @apply text-muted-foreground text-xs font-mono mt-1;
+  }
+
+  .btn-reboot {
+    @apply flex items-center justify-center w-8 h-8 rounded border border-red-500 bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-all;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  .btn-reboot:hover {
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
   }
 
   .card-body {
@@ -324,7 +342,8 @@
 
   .do-item {
     @apply grid grid-cols-[80px_1fr] items-center bg-muted/30 p-2 rounded-md border border-border;
-    min-height: 40px;
+    min-height: 48px;
+    height: 48px;
   }
 
   .do-item-on {
@@ -350,7 +369,8 @@
 
   .ai-item {
     @apply relative grid grid-cols-[80px_1fr] items-center bg-muted/30 p-2 rounded-md border border-border;
-    min-height: 40px;
+    min-height: 48px;
+    height: 48px;
   }
 
   .ai-info {
@@ -376,6 +396,10 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .btn-ctrl:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
 
   .btn-ctrl.active-on {
@@ -425,10 +449,18 @@
 
   .val-display {
     @apply text-right;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    height: 28px;
   }
 
   .di-val-display {
     @apply text-center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
   }
 
   .di-state {

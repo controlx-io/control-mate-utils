@@ -269,6 +269,22 @@ func (app *App) extensionHandler(w http.ResponseWriter, r *http.Request) {
 	app.templates.ExecuteTemplate(w, "extension.html", data)
 }
 
+func (app *App) rediscoverExtensionCardsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Stop existing manager cycle if present
+	if app.extensionMgr != nil {
+		app.extensionMgr.StopCycle()
+	}
+
+	// Re-initialize manager (performs auto-discovery and conditionally starts cycle)
+	app.extensionMgr = extension.InitializeManager()
+
+	// Return current cards after rediscovery
+	cards := app.extensionMgr.RefreshAll()
+	json.NewEncoder(w).Encode(map[string]interface{}{"cards": cards})
+}
+
 func (app *App) getExtensionCardsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	cards := app.extensionMgr.RefreshAll()
@@ -345,6 +361,18 @@ func (app *App) extensionCardHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := app.extensionMgr.QueueWriteAOType(cardID, req.Index, req.Mode); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+
+	case strings.HasSuffix(path, "/reboot"):
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if err := app.extensionMgr.RebootCard(cardID); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
@@ -757,9 +785,11 @@ func main() {
 	r.HandleFunc("/api/processes", app.getProcessesHandler).Methods("GET")
 	r.HandleFunc("/api/system/reboot", app.rebootHandler).Methods("POST")
 	r.HandleFunc("/api/extension/cards", app.getExtensionCardsHandler).Methods("GET")
+	r.HandleFunc("/api/extension/cards/rediscover", app.rediscoverExtensionCardsHandler).Methods("POST")
 	r.HandleFunc("/api/extension/cards/{id}/write-do", app.extensionCardHandler).Methods("POST")
 	r.HandleFunc("/api/extension/cards/{id}/write-ao", app.extensionCardHandler).Methods("POST")
 	r.HandleFunc("/api/extension/cards/{id}/write-aotype", app.extensionCardHandler).Methods("POST")
+	r.HandleFunc("/api/extension/cards/{id}/reboot", app.extensionCardHandler).Methods("POST")
 
 	fmt.Println("ControlMate Utils starting on :9080")
 	log.Fatal(http.ListenAndServe(":9080", r))

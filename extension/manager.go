@@ -12,13 +12,14 @@ import (
 )
 
 type CardState struct {
-	Timestamp time.Time `json:"timestamp"`
-	DI        []bool    `json:"di,omitempty"`
-	DO        []bool    `json:"do,omitempty"`
-	AI        []float32 `json:"ai,omitempty"`
-	AO        []float32 `json:"ao,omitempty"`
-	AOType    []string  `json:"aoType,omitempty"`
-	Error     string    `json:"error,omitempty"`
+	Timestamp    time.Time `json:"timestamp"`
+	DI           []bool    `json:"di,omitempty"`
+	DO           []bool    `json:"do,omitempty"`
+	AI           []float32 `json:"ai,omitempty"`
+	AO           []float32 `json:"ao,omitempty"`
+	AOType       []string  `json:"aoType,omitempty"`
+	SerialNumber string    `json:"serialNumber,omitempty"`
+	Error        string    `json:"error,omitempty"`
 }
 
 type Card struct {
@@ -345,4 +346,19 @@ func (m *Manager) ProcessWriteQueue() {
 			time.Sleep(m.operationDelay)
 		}
 	}
+}
+
+// RebootCard sends a reboot command to the specified card
+func (m *Manager) RebootCard(cardID string) error {
+	c, ok := m.GetCard(cardID)
+	if !ok {
+		return fmt.Errorf("card not found")
+	}
+
+	pc, err := m.ensurePort(c.PortPath)
+	if err != nil {
+		return err
+	}
+
+	return pc.reboot(c.SlaveID)
 }

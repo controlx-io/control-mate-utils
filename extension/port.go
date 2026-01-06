@@ -165,7 +165,35 @@ func (pc *portClient) readCard(slave byte, spec ModelSpec) (CardState, error) {
 		time.Sleep(pc.operationDelay) // RS485 delay
 	}
 
+	// Read Serial Number
+	state.SerialNumber = pc.readSerialNumber()
+	time.Sleep(pc.operationDelay) // RS485 delay
+
 	return state, nil
+}
+
+// readSerialNumber reads the serial number from Modbus registers 0x0070-0x0079
+// Returns empty string if read fails or no serial number is found
+func (pc *portClient) readSerialNumber() string {
+	// Read Serial Number (10 words = 20 bytes = 20 characters)
+	// Register address 0x0070-0x0079 (112-121 decimal)
+	snRaw, err := pc.client.ReadHoldingRegisters(0x0070, 10)
+	if err != nil || len(snRaw) < 20 {
+		return ""
+	}
+
+	// ReadHoldingRegisters returns bytes, each register is 2 bytes
+	// Convert to string, removing null terminators
+	snBytes := make([]byte, 20)
+	copy(snBytes, snRaw[:20])
+
+	// Find null terminator or end of string
+	nullIdx := 0
+	for nullIdx < len(snBytes) && snBytes[nullIdx] != 0 {
+		nullIdx++
+	}
+
+	return string(snBytes[:nullIdx])
 }
 
 func (pc *portClient) writeDO(slave byte, index uint16, state bool) error {
@@ -212,6 +240,19 @@ func (pc *portClient) writeAOType(slave byte, index int, mode string) error {
 		val = 0x0004
 	}
 	_, err := pc.client.WriteSingleRegister(uint16(0x0190+index), val)
+	if err == nil {
+		time.Sleep(pc.operationDelay) // RS485 delay
+	}
+	return err
+}
+
+func (pc *portClient) reboot(slave byte) error {
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+	pc.handler.SlaveId = slave
+
+	// Register address 0x0010 (16 decimal), value 0xFF00
+	_, err := pc.client.WriteSingleRegister(0x0010, 0xFF00)
 	if err == nil {
 		time.Sleep(pc.operationDelay) // RS485 delay
 	}

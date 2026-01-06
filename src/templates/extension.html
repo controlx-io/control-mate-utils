@@ -75,6 +75,10 @@
                             </div>
                         </div>
                         <div class="flex items-center space-x-2 lg:space-x-4">
+                            <button id="rediscoverCards" class="btn-secondary inline-flex items-center gap-1 hidden">
+                                <i data-lucide="refresh-cw" class="h-4 w-4"></i>
+                                <span class="hidden sm:inline">Re-discover Cards</span>
+                            </button>
                             <div class="flex items-center space-x-2 rounded-lg bg-muted px-2 lg:px-3 py-2 system-status-indicator">
                                 <div class="h-2 w-2 rounded-full bg-green-500 system-status-dot"></div>
                                 <span class="text-xs lg:text-sm font-medium hidden sm:inline system-status-text">System Online</span>
@@ -107,10 +111,31 @@
             </div>
             <div class="space-y-4">
                 <div class="space-y-2">
-                    <label for="aoModalValue" class="text-sm font-medium">Raw Value (4000-20000)</label>
+                    <label class="text-sm font-medium">Output Type</label>
+                    <div class="flex gap-2">
+                        <button type="button" id="aoType4-20mA" class="btn-ctrl flex-1" onclick="setAOType('4-20mA')">
+                            4-20mA
+                        </button>
+                        <button type="button" id="aoType0-10V" class="btn-ctrl flex-1" onclick="setAOType('0-10V')">
+                            0-10V
+                        </button>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label for="aoModalValue" id="aoModalValueLabel" class="text-sm font-medium">Raw Value</label>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-muted-foreground">Raw</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="aoValueModeToggle" class="sr-only peer" onchange="toggleAOValueMode()">
+                                <div class="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                            </label>
+                            <span class="text-xs text-muted-foreground">Normalized</span>
+                        </div>
+                    </div>
                     <div class="flex items-center gap-3">
-                        <input type="range" id="aoModalSlider" class="range-slider flex-1" min="4000" max="20000" step="1" value="4000">
-                        <input type="number" id="aoModalValue" class="form-input w-24" min="4000" max="20000" step="1" value="4000">
+                        <input type="range" id="aoModalSlider" class="range-slider flex-1" min="0" max="20000" step="1" value="4000">
+                        <input type="number" id="aoModalValue" class="form-input w-24" min="0" max="20000" step="1" value="4000">
                     </div>
                 </div>
                 <div class="flex justify-end gap-2 pt-2 border-t">
@@ -131,10 +156,38 @@
         let savedSliderValues = {};
         let currentAOCardId = null;
         let currentAOChannel = null;
+        let loadCardsPending = false; // Flag to prevent concurrent requests
         
         // --- DOM CACHE ---
         let cardElements = {}; // Map of cardId -> card DOM element
         let cardStructure = {}; // Map of cardId -> { diCount, doCount, aiCount, aoCount, module }
+
+        // --- HELPER: Format timestamp ---
+        function formatTimestamp(timestampStr) {
+            if (!timestampStr) return 'N/A';
+            try {
+                const date = new Date(timestampStr);
+                if (isNaN(date.getTime())) return 'N/A';
+                
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const day = date.getDate();
+                const month = months[date.getMonth()];
+                const year = date.getFullYear();
+                
+                let hours = date.getHours();
+                const minutes = date.getMinutes();
+                const seconds = date.getSeconds();
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12;
+                hours = hours ? hours : 12; // the hour '0' should be '12'
+                const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+                const secondsStr = seconds < 10 ? '0' + seconds : seconds;
+                
+                return `${day}-${month}-${year} ${hours}:${minutesStr}:${secondsStr} ${ampm}`;
+            } catch (e) {
+                return 'N/A';
+            }
+        }
 
         // --- HELPER: Scale to Raw Int (0-4095) ---
         function valToRawInt(val, maxRange) {
@@ -177,10 +230,21 @@
             cardEl.className = 'io-card';
             cardEl.setAttribute('data-card-id', card.id);
             
+            const sn = (card.last && card.last.serialNumber) ? card.last.serialNumber : 'N/A';
+            const timestamp = (card.last && card.last.timestamp) 
+                ? formatTimestamp(card.last.timestamp) 
+                : 'N/A';
             let html = `
                 <div class="card-header">
-                    <div class="card-title">Card ${card.id}</div>
-                    <div class="card-model">ID: ${card.id} &bull; ${card.module.replace('USR-', '')}</div>
+                    <div class="flex-1">
+                        <div class="card-title">Card ${card.id}</div>
+                        <div class="card-model">ID: ${card.id} &bull; ${card.module.replace('USR-', '')}</div>
+                        <div class="card-sn">SN: ${sn}</div>
+                        <div class="card-timestamp">Updated: ${timestamp}</div>
+                    </div>
+                    <button class="btn-reboot" onclick="rebootCard('${card.id}')" title="Reboot Card">
+                        <i data-lucide="power" class="h-4 w-4"></i>
+                    </button>
                 </div>
                 <div class="card-body">`;
 
@@ -257,9 +321,11 @@
                     let normalized = 0;
                     let unit = '';
                     if (aoType === '0-10V') {
-                        normalized = ((raw - 4000) / 16000) * 10;
+                        // Raw range: 0-10000, Normalized: 0-10V
+                        normalized = (raw / 10000) * 10;
                         unit = 'V';
                     } else {
+                        // Raw range: 4000-20000, Normalized: 4-20mA
                         normalized = ((raw - 4000) / 16000) * 16 + 4;
                         unit = 'mA';
                     }
@@ -287,6 +353,27 @@
         function updateCardValues(cardId, card) {
             const cardEl = cardElements[cardId];
             if (!cardEl || !card.last) return;
+
+            // Update card header with SN and timestamp
+            const cardHeader = cardEl.querySelector('.card-header');
+            if (cardHeader) {
+                const sn = (card.last && card.last.serialNumber) ? card.last.serialNumber : 'N/A';
+                const timestamp = (card.last && card.last.timestamp) 
+                    ? formatTimestamp(card.last.timestamp) 
+                    : 'N/A';
+                const cardModel = cardHeader.querySelector('.card-model');
+                const cardSN = cardHeader.querySelector('.card-sn');
+                const cardTimestamp = cardHeader.querySelector('.card-timestamp');
+                if (cardModel) {
+                    cardModel.textContent = `ID: ${card.id} • ${card.module.replace('USR-', '')}`;
+                }
+                if (cardSN) {
+                    cardSN.textContent = `SN: ${sn}`;
+                }
+                if (cardTimestamp) {
+                    cardTimestamp.textContent = `Updated: ${timestamp}`;
+                }
+            }
 
             // Update DI values
             if (card.last.di) {
@@ -348,9 +435,11 @@
                         let normalized = 0;
                         let unit = '';
                         if (aoType === '0-10V') {
-                            normalized = ((raw - 4000) / 16000) * 10;
+                            // Raw range: 0-10000, Normalized: 0-10V
+                            normalized = (raw / 10000) * 10;
                             unit = 'V';
                         } else {
+                            // Raw range: 4000-20000, Normalized: 4-20mA
                             normalized = ((raw - 4000) / 16000) * 16 + 4;
                             unit = 'mA';
                         }
@@ -400,6 +489,7 @@
                     container.appendChild(cardEl);
                     cardElements[cardId] = cardEl;
                     cardStructure[cardId] = newStructure;
+                    lucide.createIcons();
                 } else {
                     // Just update values
                     updateCardValues(cardId, card);
@@ -465,7 +555,8 @@
         }
         
         function updateDO(cardId, channel, newVal) {
-            showNotification(`DO-${channel+1} write request sent`, 'info');
+            const state = newVal ? 'ON' : 'OFF';
+            showNotification(`Card ${cardId} - DO-${channel+1}: ${state} request sent`, 'info');
             fetch(`/api/extension/cards/${cardId}/write-do`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -474,7 +565,7 @@
             .then(() => loadCards())
             .catch(err => {
                 console.error('Error updating DO:', err);
-                showNotification(`Failed to update DO-${channel+1}`, 'error');
+                showNotification(`Card ${cardId} - Failed to update DO-${channel+1}`, 'error');
             });
         }
 
@@ -487,33 +578,258 @@
             const setpoint = (card.aoSetpoints && card.aoSetpoints[channel] !== undefined) 
                 ? card.aoSetpoints[channel] 
                 : raw;
+            const currentAOType = (card.last.aoType && card.last.aoType[channel]) ? card.last.aoType[channel] : '4-20mA';
+            
+            // Reset to normalized mode when opening modal (default)
+            aoValueMode = 'normalized';
+            const toggle = document.getElementById('aoValueModeToggle');
+            if (toggle) toggle.checked = true;
             
             document.getElementById('aoModalTitle').textContent = `Card ${cardId} - AO-${channel+1}`;
             document.getElementById('aoModalChannel').textContent = `Current: ${raw} | Target: ${Math.round(setpoint)}`;
-            document.getElementById('aoModalSlider').value = Math.round(setpoint);
-            document.getElementById('aoModalValue').value = Math.round(setpoint);
+            
+            // Update AO type buttons (this will also update value display if needed)
+            updateAOTypeButtons(currentAOType);
+            
+            // Set initial values - convert to normalized since that's the default mode
+            const slider = document.getElementById('aoModalSlider');
+            const input = document.getElementById('aoModalValue');
+            const rawRange = getRawRange(currentAOType);
+            // Clamp setpoint to valid range
+            const clampedSetpoint = Math.max(rawRange.min, Math.min(rawRange.max, Math.round(setpoint)));
+            // Convert to normalized for display
+            const normalizedValue = rawToNormalized(clampedSetpoint, currentAOType);
+            slider.value = normalizedValue.toFixed(2);
+            input.value = normalizedValue.toFixed(2);
+            updateAOValueDisplay();
             
             const modal = document.getElementById('aoControlModal');
             modal.classList.remove('hidden');
             
             // Sync slider and input
-            const slider = document.getElementById('aoModalSlider');
-            const input = document.getElementById('aoModalValue');
-            
             slider.oninput = function() {
-                input.value = this.value;
+                if (aoValueMode === 'normalized') {
+                    input.value = parseFloat(this.value).toFixed(2);
+                } else {
+                    input.value = this.value;
+                }
             };
             
             input.oninput = function() {
-                let val = parseInt(this.value);
-                if (isNaN(val)) val = 4000;
-                if (val < 4000) val = 4000;
-                if (val > 20000) val = 20000;
-                slider.value = val;
-                this.value = val;
+                let val = parseFloat(this.value);
+                if (isNaN(val)) {
+                    val = aoValueMode === 'normalized' 
+                        ? (currentAOType === '0-10V' ? 0 : 4)
+                        : 4000;
+                }
+                
+                if (aoValueMode === 'normalized') {
+                    const min = currentAOType === '0-10V' ? 0 : 4;
+                    const max = currentAOType === '0-10V' ? 10 : 20;
+                    if (val < min) val = min;
+                    if (val > max) val = max;
+                    slider.value = val.toFixed(2);
+                    this.value = val.toFixed(2);
+                } else {
+                    if (val < 4000) val = 4000;
+                    if (val > 20000) val = 20000;
+                    slider.value = val;
+                    this.value = val;
+                }
             };
             
             lucide.createIcons();
+        };
+
+        let currentAOType = '4-20mA';
+        let aoValueMode = 'normalized'; // 'raw' or 'normalized' - default to normalized
+
+        function updateAOTypeButtons(selectedType) {
+            currentAOType = selectedType;
+            const btn4_20 = document.getElementById('aoType4-20mA');
+            const btn0_10 = document.getElementById('aoType0-10V');
+            
+            if (btn4_20 && btn0_10) {
+                if (selectedType === '4-20mA') {
+                    btn4_20.classList.add('active-on');
+                    btn0_10.classList.remove('active-on');
+                } else {
+                    btn0_10.classList.add('active-on');
+                    btn4_20.classList.remove('active-on');
+                }
+            }
+            
+            // Update value display (both raw and normalized modes need updating)
+            updateAOValueDisplay();
+        }
+
+        function rawToNormalized(raw, aoType) {
+            if (aoType === '0-10V') {
+                // Raw range: 0-10000, Normalized: 0-10V
+                return (raw / 10000) * 10;
+            } else { // 4-20mA
+                // Raw range: 4000-20000, Normalized: 4-20mA
+                return ((raw - 4000) / 16000) * 16 + 4;
+            }
+        }
+
+        function normalizedToRaw(normalized, aoType) {
+            if (aoType === '0-10V') {
+                // Raw range: 0-10000, Normalized: 0-10V
+                return Math.round((normalized / 10) * 10000);
+            } else { // 4-20mA
+                // Raw range: 4000-20000, Normalized: 4-20mA
+                return Math.round(((normalized - 4) / 16) * 16000 + 4000);
+            }
+        }
+
+        function getRawRange(aoType) {
+            if (aoType === '0-10V') {
+                return { min: 0, max: 10000 };
+            } else { // 4-20mA
+                return { min: 4000, max: 20000 };
+            }
+        }
+
+        function updateAOValueDisplay() {
+            const slider = document.getElementById('aoModalSlider');
+            const input = document.getElementById('aoModalValue');
+            const label = document.getElementById('aoModalValueLabel');
+            
+            if (!slider || !input || !label) return;
+            
+            const rawRange = getRawRange(currentAOType);
+            const currentRaw = parseInt(slider.value) || rawRange.min;
+            
+            if (aoValueMode === 'normalized') {
+                const normalized = rawToNormalized(currentRaw, currentAOType);
+                const unit = currentAOType === '0-10V' ? 'V' : 'mA';
+                const minNorm = currentAOType === '0-10V' ? 0 : 4;
+                const maxNorm = currentAOType === '0-10V' ? 10 : 20;
+                
+                label.textContent = `Normalized Value (${minNorm}-${maxNorm}${unit})`;
+                slider.min = minNorm;
+                slider.max = maxNorm;
+                slider.step = 0.01;
+                slider.value = normalized.toFixed(2);
+                input.min = minNorm;
+                input.max = maxNorm;
+                input.step = 0.01;
+                input.value = normalized.toFixed(2);
+            } else {
+                label.textContent = `Raw Value (${rawRange.min}-${rawRange.max})`;
+                slider.min = rawRange.min;
+                slider.max = rawRange.max;
+                slider.step = 1;
+                slider.value = currentRaw;
+                input.min = rawRange.min;
+                input.max = rawRange.max;
+                input.step = 1;
+                input.value = currentRaw;
+            }
+        }
+
+        window.toggleAOValueMode = function() {
+            const toggle = document.getElementById('aoValueModeToggle');
+            if (!toggle) return;
+            
+            const slider = document.getElementById('aoModalSlider');
+            const input = document.getElementById('aoModalValue');
+            
+            if (!slider || !input) return;
+            
+            // Get current value
+            const rawRange = getRawRange(currentAOType);
+            let currentValue = parseFloat(input.value) || rawRange.min;
+            
+            if (aoValueMode === 'raw') {
+                // Switching to normalized
+                aoValueMode = 'normalized';
+                const normalized = rawToNormalized(currentValue, currentAOType);
+                updateAOValueDisplay();
+                slider.value = normalized.toFixed(2);
+                input.value = normalized.toFixed(2);
+            } else {
+                // Switching to raw
+                aoValueMode = 'raw';
+                const raw = normalizedToRaw(currentValue, currentAOType);
+                updateAOValueDisplay();
+                slider.value = raw;
+                input.value = raw;
+            }
+            
+            // Update sync handlers
+            slider.oninput = function() {
+                if (aoValueMode === 'normalized') {
+                    input.value = parseFloat(this.value).toFixed(2);
+                } else {
+                    input.value = this.value;
+                }
+            };
+            
+            input.oninput = function() {
+                let val = parseFloat(this.value);
+                const rawRange = getRawRange(currentAOType);
+                
+                if (isNaN(val)) {
+                    val = aoValueMode === 'normalized' 
+                        ? (currentAOType === '0-10V' ? 0 : 4)
+                        : rawRange.min;
+                }
+                
+                if (aoValueMode === 'normalized') {
+                    const min = currentAOType === '0-10V' ? 0 : 4;
+                    const max = currentAOType === '0-10V' ? 10 : 20;
+                    if (val < min) val = min;
+                    if (val > max) val = max;
+                    slider.value = val.toFixed(2);
+                    this.value = val.toFixed(2);
+                } else {
+                    if (val < rawRange.min) val = rawRange.min;
+                    if (val > rawRange.max) val = rawRange.max;
+                    slider.value = val;
+                    this.value = val;
+                }
+            };
+        };
+
+        window.setAOType = function(type) {
+            if (currentAOCardId === null || currentAOChannel === null) return;
+            
+            updateAOTypeButtons(type);
+            
+            fetch(`/api/extension/cards/${currentAOCardId}/write-aotype`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ index: currentAOChannel, mode: type })
+            })
+            .then(() => {
+                showNotification(`Card ${currentAOCardId} - AO-${currentAOChannel+1} type set to ${type}`, 'info');
+                loadCards();
+            })
+            .catch(err => {
+                console.error('Error setting AO type:', err);
+                showNotification(`Card ${currentAOCardId} - Failed to set AO-${currentAOChannel+1} type`, 'error');
+            });
+        };
+
+        window.rebootCard = function(cardId) {
+            if (!confirm(`Are you sure you want to reboot Card ${cardId}?`)) {
+                return;
+            }
+            
+            showNotification(`Card ${cardId} - Reboot request sent`, 'info');
+            fetch(`/api/extension/cards/${cardId}/reboot`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            })
+            .then(() => {
+                showNotification(`Card ${cardId} - Reboot command sent successfully`, 'success');
+            })
+            .catch(err => {
+                console.error('Error rebooting card:', err);
+                showNotification(`Card ${cardId} - Failed to reboot`, 'error');
+            });
         };
 
         window.hideAOControlModal = function() {
@@ -525,7 +841,32 @@
 
         function commitAO(cardId, channel) {
             const input = document.getElementById('aoModalValue');
-            const rawValue = parseInt(input.value);
+            let rawValue;
+            
+            // Always convert to raw value, regardless of display mode
+            if (aoValueMode === 'normalized') {
+                // User is viewing normalized value, convert to raw
+                const normalizedValue = parseFloat(input.value);
+                if (isNaN(normalizedValue)) {
+                    showNotification(`Card ${cardId} - Invalid normalized value`, 'error');
+                    return;
+                }
+                rawValue = normalizedToRaw(normalizedValue, currentAOType);
+            } else {
+                // User is viewing raw value, use directly
+                rawValue = parseInt(input.value);
+                if (isNaN(rawValue)) {
+                    showNotification(`Card ${cardId} - Invalid raw value`, 'error');
+                    return;
+                }
+            }
+            
+            // Validate raw value is within expected range
+            const rawRange = getRawRange(currentAOType);
+            if (rawValue < rawRange.min || rawValue > rawRange.max) {
+                showNotification(`Card ${cardId} - Raw value ${rawValue} out of range (${rawRange.min}-${rawRange.max})`, 'error');
+                return;
+            }
             
             // Store setpoint for display
             if (!stateStore[cardId].aoSetpoints) {
@@ -533,7 +874,8 @@
             }
             stateStore[cardId].aoSetpoints[channel] = rawValue;
             
-            showNotification(`AO-${channel+1} write request sent (raw: ${rawValue})`, 'info');
+            // Always send raw value to backend
+            showNotification(`Card ${cardId} - AO-${channel+1} write request sent (raw: ${rawValue})`, 'info');
             fetch(`/api/extension/cards/${cardId}/write-ao`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -545,11 +887,17 @@
             })
             .catch(err => {
                 console.error('Error updating AO:', err);
-                showNotification(`Failed to update AO-${channel+1}`, 'error');
+                showNotification(`Card ${cardId} - Failed to update AO-${channel+1}`, 'error');
             });
         }
 
         async function loadCards() {
+            // Skip if previous request is still pending
+            if (loadCardsPending) {
+                return;
+            }
+            
+            loadCardsPending = true;
             try {
                 const res = await fetch('/api/extension/cards');
                 const data = await res.json();
@@ -563,6 +911,8 @@
             } catch (err) {
                 console.error('Error loading cards:', err);
                 renderDashboard();
+            } finally {
+                loadCardsPending = false;
             }
         }
 
@@ -573,6 +923,44 @@
             // Initialize NetworkManager for version loading and other common functionality
             if (typeof NetworkManager !== 'undefined' && !window.networkManager) {
                 window.networkManager = new NetworkManager();
+            }
+
+            // Re-detect cards button
+            const rediscoverBtn = document.getElementById('rediscoverCards');
+            if (rediscoverBtn) {
+                let rediscoverPending = false;
+                rediscoverBtn.addEventListener('click', async () => {
+                    // Skip if previous request is still pending
+                    if (rediscoverPending) {
+                        return;
+                    }
+                    
+                    // Show confirmation dialog
+                    if (!confirm('Are you sure you want to re-discover extension cards? This will reset all cards and re-detect them.')) {
+                        return;
+                    }
+                    
+                    const originalText = rediscoverBtn.querySelector('span').textContent;
+                    rediscoverBtn.disabled = true;
+                    rediscoverBtn.querySelector('span').textContent = 'Detecting...';
+                    rediscoverPending = true;
+                    try {
+                        const res = await fetch('/api/extension/cards/rediscover', { method: 'POST' });
+                        if (!res.ok) {
+                            throw new Error(`HTTP ${res.status}`);
+                        }
+                        await res.json();
+                        showNotification('Extension cards re-detected successfully', 'success');
+                        loadCards();
+                    } catch (err) {
+                        console.error('Error rediscovering cards:', err);
+                        showNotification('Failed to re-detect extension cards', 'error');
+                    } finally {
+                        rediscoverBtn.disabled = false;
+                        rediscoverBtn.querySelector('span').textContent = originalText;
+                        rediscoverPending = false;
+                    }
+                });
             }
 
             // Modal event listeners
