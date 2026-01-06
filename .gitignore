@@ -32,3 +32,6 @@ tmp/
 
 # Logs
 *.log
+
+# Local Config
+.env*

@@ -10,13 +10,21 @@ import (
 
 	"control-mate-utils/src/server"
 	"control-mate-utils/src/server/config"
+	"control-mate-utils/src/server/util"
 )
 
 const (
-	// ServerURL      = "https://jasperx.io/api/v1.0/device/jaspermate"
-	serverURL      = "http://192.168.97.192:3000/api/v1.0/device/jaspermate"
-	reportInterval = 5 * time.Minute
+	defaultServerURL = "https://base.jasperx.io/api/v1.0/device/jaspermate"
+	reportInterval   = 5 * time.Minute
 )
+
+var serverURL = defaultServerURL
+
+func init() {
+	if url := util.LoadEnvLocal("JASPER_MATE_URL"); url != "" {
+		serverURL = url
+	}
+}
 
 type Payload struct {
 	DeviceID string   `json:"deviceId"`
@@ -139,7 +147,10 @@ func reportStatus() {
 	data := createPayload(localIP, allIPs)
 
 	jsonData, _ := json.Marshal(data)
-	fmt.Printf("Reported: %s\n", string(jsonData))
+	// Log if using custom URL
+	if serverURL != defaultServerURL {
+		fmt.Printf("Reported: %s\n", string(jsonData))
+	}
 
 	resp, err := httpPost(serverURL, jsonData)
 	if err != nil {
