@@ -41,6 +41,7 @@ class NetworkManager {
             
             if (this.nmcliAvailable) {
                 this.loadCurrentWiFi();
+                this.loadSavedNetworks();
             } else {
                 this.showNmcliError();
             }
@@ -376,6 +377,93 @@ class NetworkManager {
         }
     }
 
+    async loadSavedNetworks() {
+        const loadingEl = document.getElementById('savedNetworksLoading');
+        const listEl = document.getElementById('savedNetworksList');
+
+        // Only proceed if elements exist
+        if (!loadingEl || !listEl) {
+            return;
+        }
+
+        loadingEl.classList.remove('hidden');
+        listEl.innerHTML = '';
+
+        try {
+            const response = await fetch('/api/wifi/saved');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const networks = await response.json();
+            this.renderSavedNetworks(networks);
+        } catch (error) {
+            console.error('Error loading saved networks:', error);
+            listEl.innerHTML = `
+                <div class="text-center py-8 text-red-600">
+                    <i data-lucide="alert-circle" class="h-8 w-8 mx-auto mb-2"></i>
+                    <p>Failed to load saved networks</p>
+                    <p class="text-sm text-muted-foreground">${error.message}</p>
+                </div>
+            `;
+            lucide.createIcons();
+        } finally {
+            loadingEl.classList.add('hidden');
+        }
+    }
+
+    renderSavedNetworks(networks) {
+        const listEl = document.getElementById('savedNetworksList');
+        
+        if (!networks || networks.length === 0) {
+            listEl.innerHTML = `
+                <div class="text-center py-8 text-muted-foreground col-span-full">
+                    <div class="flex flex-col items-center space-y-4">
+                        <div class="flex items-center justify-center w-12 h-12 rounded-full bg-muted">
+                            <i data-lucide="wifi-off" class="h-6 w-6"></i>
+                        </div>
+                        <div class="text-center">
+                            <p class="text-base font-medium">No saved networks found</p>
+                            <p class="text-xs">Connect to a WiFi network to save it</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+            return;
+        }
+
+        listEl.innerHTML = networks.map(network => {
+            const isActive = network.active;
+            
+            return `
+                <div class="wifi-card group h-full ${isActive ? 'wifi-connected' : ''}">
+                    <div class="wifi-header">
+                        <div class="flex items-center space-x-2">
+                            <div class="flex items-center justify-center w-8 h-8 rounded-md ${isActive ? 'bg-primary/10' : 'bg-muted'}">
+                                <i data-lucide="wifi" class="h-4 w-4 ${isActive ? 'text-primary' : 'text-muted-foreground'}"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h3 class="wifi-ssid truncate text-sm">${this.escapeHtml(network.ssid)}</h3>
+                                <div class="flex items-center space-x-1">
+                                    <span class="text-xs text-muted-foreground">Saved</span>
+                                    ${isActive ? '<span class="connected-badge text-xs ml-2">Active</span>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between pt-2 border-t border-border/50">
+                        <div class="flex items-center space-x-1 text-xs text-muted-foreground">
+                            <i data-lucide="smartphone" class="h-3 w-3"></i>
+                            <span class="truncate">${this.escapeHtml(network.device || 'Unknown Device')}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        lucide.createIcons();
+    }
+
     renderInterfaces(interfaces) {
         const listEl = document.getElementById('interfacesList');
         
@@ -530,6 +618,16 @@ class NetworkManager {
         listEl.innerHTML = '';
 
         try {
+            // Step 1: Trigger rescan
+            const rescanResponse = await fetch('/api/wifi/rescan', { method: 'POST' });
+            if (!rescanResponse.ok) {
+                console.warn('Rescan trigger failed, attempting to list anyway');
+            }
+
+            // Step 2: Wait for 5 seconds to allow scan to populate
+            await new Promise(resolve => setTimeout(resolve, 5000));
+
+            // Step 3: Fetch results
             // Load both current WiFi and scan for networks
             const [currentResponse, scanResponse] = await Promise.all([
                 fetch('/api/wifi/current'),

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -35,6 +36,13 @@ type WiFiNetwork struct {
 	SSID     string `json:"ssid"`
 	Signal   string `json:"signal"`
 	Security string `json:"security"`
+}
+
+type SavedNetwork struct {
+	SSID   string `json:"ssid"`
+	UUID   string `json:"uuid"`
+	Active bool   `json:"active"`
+	Device string `json:"device"`
 }
 
 type CurrentWiFi struct {
@@ -136,6 +144,46 @@ func (app *App) getInterfacesHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(interfaces)
 }
 
+func (app *App) rescanWiFiHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if !app.nmcliAvailable {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{"error": "nmcli is not installed or not available"})
+		return
+	}
+
+	// Trigger a rescan in the background so we don't block the request
+	go func() {
+		cmd := exec.Command("nmcli", "device", "wifi", "rescan")
+		if err := cmd.Run(); err != nil {
+			log.Printf("Background WiFi rescan failed: %v", err)
+		}
+	}()
+
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]string{"status": "scanning_started"})
+}
+
+func (app *App) getSavedWiFiNetworksHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if !app.nmcliAvailable {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{"error": "nmcli is not installed or not available"})
+		return
+	}
+
+	networks, err := getSavedWiFiNetworks(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	json.NewEncoder(w).Encode(networks)
+}
+
 func (app *App) getWiFiNetworksHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -145,7 +193,7 @@ func (app *App) getWiFiNetworksHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	networks, err := scanWiFiNetworks()
+	networks, err := listWiFiNetworks(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -190,7 +238,7 @@ func (app *App) getCurrentWiFiHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentWiFi, err := getCurrentWiFi()
+	currentWiFi, err := getCurrentWiFi(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -350,24 +398,64 @@ func getNetworkInterfaces() ([]NetworkInterface, error) {
 	return result, nil
 }
 
-func scanWiFiNetworks() ([]WiFiNetwork, error) {
-	// First, trigger a rescan to refresh the WiFi network list
-	rescanCmd := exec.Command("nmcli", "device", "wifi", "rescan")
-	if err := rescanCmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to rescan WiFi networks: %v", err)
-	}
-
-	// Wait 5 seconds for the rescan to complete
-	time.Sleep(5 * time.Second)
-
-	// Now get the updated list of WiFi networks
-	cmd := exec.Command("nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list")
+func listWiFiNetworks(ctx context.Context) ([]WiFiNetwork, error) {
+	// Only get the list of WiFi networks (assume scan was triggered separately or using cached)
+	// We use --rescan no to avoid blocking if possible, although standard list command
+	// might still block if daemon is busy.
+	// Using CommandContext allows the request to be cancelled if the user navigates away.
+	cmd := exec.CommandContext(ctx, "nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list")
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to scan WiFi networks with nmcli: %v", err)
+		// If context was cancelled, return that error
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, fmt.Errorf("failed to list WiFi networks with nmcli: %v", err)
 	}
 
 	return parseNmcliOutput(string(output)), nil
+}
+
+func getSavedWiFiNetworks(ctx context.Context) ([]SavedNetwork, error) {
+	cmd := exec.CommandContext(ctx, "nmcli", "-t", "-f", "NAME,UUID,TYPE,DEVICE,ACTIVE", "connection", "show")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get saved networks: %v", err)
+	}
+
+	return parseNmcliSavedOutput(string(output)), nil
+}
+
+func parseNmcliSavedOutput(output string) []SavedNetwork {
+	var networks []SavedNetwork
+	lines := strings.Split(output, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// NAME:UUID:TYPE:DEVICE:ACTIVE
+		parts := strings.Split(line, ":")
+		if len(parts) >= 5 {
+			name := parts[0]
+			uuid := parts[1]
+			connType := parts[2]
+			device := parts[3]
+			active := parts[4]
+
+			if connType == "802-11-wireless" {
+				networks = append(networks, SavedNetwork{
+					SSID:   name,
+					UUID:   uuid,
+					Active: active == "yes",
+					Device: device,
+				})
+			}
+		}
+	}
+	return networks
 }
 
 func parseNmcliOutput(output string) []WiFiNetwork {
@@ -422,11 +510,15 @@ func normalizeSecurityType(security string) string {
 	return "Unknown"
 }
 
-func getCurrentWiFi() (*CurrentWiFi, error) {
+func getCurrentWiFi(ctx context.Context) (*CurrentWiFi, error) {
 	// Get current WiFi connection using nmcli
-	cmd := exec.Command("nmcli", "-t", "-f", "ACTIVE,SSID,SIGNAL,SECURITY", "dev", "wifi")
+	// Using CommandContext to allow cancellation
+	cmd := exec.CommandContext(ctx, "nmcli", "-t", "-f", "ACTIVE,SSID,SIGNAL,SECURITY", "dev", "wifi")
 	output, err := cmd.Output()
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return &CurrentWiFi{Connected: false}, nil
 	}
 
@@ -645,7 +737,9 @@ func main() {
 	r.HandleFunc("/api/health", app.getSystemHealthHandler).Methods("GET")
 	r.HandleFunc("/api/nmcli/status", app.getNmcliStatusHandler).Methods("GET")
 	r.HandleFunc("/api/interfaces", app.getInterfacesHandler).Methods("GET")
+	r.HandleFunc("/api/wifi/saved", app.getSavedWiFiNetworksHandler).Methods("GET")
 	r.HandleFunc("/api/wifi/scan", app.getWiFiNetworksHandler).Methods("GET")
+	r.HandleFunc("/api/wifi/rescan", app.rescanWiFiHandler).Methods("POST")
 	r.HandleFunc("/api/wifi/current", app.getCurrentWiFiHandler).Methods("GET")
 	r.HandleFunc("/api/wifi/connect", app.connectWiFiHandler).Methods("POST")
 	r.HandleFunc("/api/processes", app.getProcessesHandler).Methods("GET")

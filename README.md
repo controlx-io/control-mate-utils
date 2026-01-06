@@ -13,7 +13,7 @@ A Go-based utility application for headless Debian systems to manage network int
 ## Requirements
 
 ### Development Dependencies
-- **Node.js** (v16 or higher) - for Tailwind CSS compilation
+- **Node.js** (v22 or higher) - for Tailwind CSS compilation
 - **npm** - for package management
 
 ### System Dependencies
@@ -88,7 +88,7 @@ build/
 scp ./build/control-mate-utils-linux-arm64 user@target:~
 
 # Run the application (requires root privileges for WiFi operations)
-sudo ./build/control-mate-utils-linux-arm64
+sudo ./release/control-mate-utils-linux-arm64
 
 # The web interface will be available at http://localhost:8080
 ```
@@ -151,6 +151,65 @@ The application compiles to a single executable file (~9.8MB) that includes:
 - No external file dependencies required at runtime
 
 The executable is completely self-contained - simply copy the `control-mate-utils` binary to your target system and run with appropriate permissions. No need to copy template or static files separately.
+
+## Uninstallation
+
+### If Installed via Install Script
+
+If you installed ControlMate Utils using the install script, you can uninstall it using:
+
+```bash
+curl -sL https://raw.githubusercontent.com/controlx-io/control-mate-utils/refs/heads/main/scripts/install_to_linux.sh | sudo -E bash -s -- uninstall
+```
+
+This will:
+- Stop and disable the systemd service
+- Remove the service file
+- Remove the binary from `/var/lib/cm-utils/`
+- Remove the symlink from `/usr/local/bin/cm-utils`
+- Remove polkit rule files
+- Remove sudoers configuration
+- Optionally remove the `cm-utils` system user (with confirmation)
+
+### Manual Uninstallation
+
+If you installed the binary manually (without the install script):
+
+1. **Stop any running instances:**
+   ```bash
+   # If running as a systemd service
+   sudo systemctl stop cm-utils
+   sudo systemctl disable cm-utils
+   sudo rm /etc/systemd/system/cm-utils.service
+   sudo systemctl daemon-reload
+   ```
+
+2. **Remove the binary:**
+   ```bash
+   # Remove the binary file (adjust path if different)
+   sudo rm /path/to/cm-utils
+   
+   # Remove symlink if created
+   sudo rm /usr/local/bin/cm-utils
+   ```
+
+3. **Remove configuration files (if any):**
+   ```bash
+   # Remove application directory
+   sudo rm -rf /var/lib/cm-utils
+   
+   # Remove polkit rules (if created)
+   sudo rm /etc/polkit-1/rules.d/55-allow-full-network-management.rules
+   sudo rm /etc/polkit-1/rules.d/56-allow-power-management.rules
+   
+   # Remove sudoers file (if created)
+   sudo rm /etc/sudoers.d/99-cm-utils-reboot
+   ```
+
+4. **Remove system user (optional):**
+   ```bash
+   sudo userdel -r cm-utils
+   ```
 
 ## Permissions
 

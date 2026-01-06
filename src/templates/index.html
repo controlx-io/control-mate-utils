@@ -117,6 +117,32 @@
 
                 <!-- WiFi Networks Section -->
                 <section class="mb-8 lg:mb-12 wifi-section">
+                    <!-- Saved Networks Section -->
+                    <div class="mb-8">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 lg:mb-6 space-y-3 sm:space-y-0">
+                            <div>
+                                <h2 class="text-xl lg:text-2xl font-bold tracking-tight">Saved Networks</h2>
+                                <p class="text-sm lg:text-base text-muted-foreground">Manage your saved WiFi connections</p>
+                            </div>
+                        </div>
+                        
+                        <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                            <div class="p-6">
+                                <div id="savedNetworksLoading" class="hidden text-center py-8">
+                                    <div class="flex flex-col items-center space-y-4">
+                                        <div class="relative">
+                                            <i data-lucide="loader-2" class="h-6 w-6 animate-spin text-primary"></i>
+                                        </div>
+                                        <p class="text-sm font-medium">Loading saved networks...</p>
+                                    </div>
+                                </div>
+                                <div id="savedNetworksList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    <!-- Saved networks will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 lg:mb-6 space-y-3 sm:space-y-0">
                         <div>
                             <h2 class="text-xl lg:text-2xl font-bold tracking-tight">WiFi Networks</h2>
