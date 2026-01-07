@@ -45,11 +45,12 @@ type CardState struct {
 }
 
 type Card struct {
-	ID       string    `json:"id"`
-	PortPath string    `json:"portPath"`
-	SlaveID  byte      `json:"slaveId"`
-	Module   string    `json:"module"`
-	Last     CardState `json:"last"`
+	ID            string    `json:"id"`
+	PortPath      string    `json:"portPath"`
+	SlaveID       byte      `json:"slaveId"`
+	Module        string    `json:"module"`
+	Last          CardState `json:"last"`
+	needsFullRead bool      // Flag to force full read (AO types, serial number) on next read cycle
 }
 
 type writeOpType int
@@ -227,14 +228,28 @@ func (m *Manager) RefreshAll() []*Card {
 			continue
 		}
 
-		state, err := pc.readCard(c.SlaveID, spec, false)
+		// Check if we need a full read (e.g., after reboot)
+		m.mu.Lock()
+		readAll := c.needsFullRead
+		if readAll {
+			// Clear the flag after we've read it
+			c.needsFullRead = false
+		}
+		m.mu.Unlock()
+
+		state, err := pc.readCard(c.SlaveID, spec, readAll)
 		if err != nil {
 			c.Last.Error = err.Error()
 		} else {
-			// Preserve SN and AOType from previous state (read only during AddCard)
-			state.SerialNumber = c.Last.SerialNumber
-			state.AOType = c.Last.AOType
-			c.Last = state
+			if readAll {
+				// Full read includes AO types and serial number, use them directly
+				c.Last = state
+			} else {
+				// Preserve SN and AOType from previous state (read only during AddCard)
+				state.SerialNumber = c.Last.SerialNumber
+				state.AOType = c.Last.AOType
+				c.Last = state
+			}
 		}
 	}
 	return cards
@@ -295,14 +310,28 @@ func (m *Manager) ReadAllAndProcessWrites() []*Card {
 		// Store previous state for change detection
 		prevState := c.Last
 
-		state, err := pc.readCard(c.SlaveID, spec, false)
+		// Check if we need a full read (e.g., after reboot)
+		m.mu.Lock()
+		readAll := c.needsFullRead
+		if readAll {
+			// Clear the flag after we've read it
+			c.needsFullRead = false
+		}
+		m.mu.Unlock()
+
+		state, err := pc.readCard(c.SlaveID, spec, readAll)
 		if err != nil {
 			c.Last.Error = err.Error()
 		} else {
-			// Preserve SN and AOType from previous state (read only during AddCard)
-			state.SerialNumber = c.Last.SerialNumber
-			state.AOType = c.Last.AOType
-			c.Last = state
+			if readAll {
+				// Full read includes AO types and serial number, use them directly
+				c.Last = state
+			} else {
+				// Preserve SN and AOType from previous state (read only during AddCard)
+				state.SerialNumber = c.Last.SerialNumber
+				state.AOType = c.Last.AOType
+				c.Last = state
+			}
 		}
 
 		// Check if DI or AI changed
@@ -509,10 +538,16 @@ func (m *Manager) ProcessWriteQueue() {
 
 // RebootCard sends a reboot command to the specified card
 func (m *Manager) RebootCard(cardID string) error {
-	c, ok := m.GetCard(cardID)
+	m.mu.Lock()
+	c, ok := m.cards[cardID]
 	if !ok {
+		m.mu.Unlock()
 		return fmt.Errorf("card not found")
 	}
+
+	// Set flag to read all info (AO types) on next read cycle after reboot
+	c.needsFullRead = true
+	m.mu.Unlock()
 
 	pc, err := m.ensurePort(c.PortPath)
 	if err != nil {
