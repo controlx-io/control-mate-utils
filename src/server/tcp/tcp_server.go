@@ -21,6 +21,7 @@ type TCPServer struct {
 	stopChan     chan struct{}
 	port         string
 	version      string
+	localOnly    bool // If true, only accept connections from localhost
 }
 
 // ClientConnection represents a connected TCP client
@@ -65,25 +66,36 @@ type WriteResponse struct {
 }
 
 // NewTCPServer creates a new TCP server instance
-func NewTCPServer(port string, extensionMgr *extension.Manager, version string) *TCPServer {
+// localOnly: if true, only accept connections from localhost (default: true for security)
+func NewTCPServer(port string, extensionMgr *extension.Manager, version string, localOnly bool) *TCPServer {
 	return &TCPServer{
 		extensionMgr: extensionMgr,
 		stopChan:     make(chan struct{}),
 		port:         port,
 		version:      version,
+		localOnly:    localOnly,
 	}
 }
 
 // Start starts the TCP server
 func (s *TCPServer) Start() error {
-	addr := "127.0.0.1:" + s.port
+	var addr string
+	if s.localOnly {
+		addr = "127.0.0.1:" + s.port
+	} else {
+		addr = "0.0.0.0:" + s.port
+	}
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("failed to start TCP server on %s: %v", addr, err)
 	}
 
 	s.listener = listener
-	log.Printf("TCP server listening on %s (localhost only)", addr)
+	if s.localOnly {
+		log.Printf("TCP server listening on %s (localhost only)", addr)
+	} else {
+		log.Printf("TCP server listening on %s (all interfaces)", addr)
+	}
 
 	// Register callback for immediate updates on DI/AI changes
 	s.extensionMgr.SetStateChangeCallback(s.onStateChange)
@@ -144,12 +156,14 @@ func (s *TCPServer) acceptLoop() {
 				}
 			}
 
-			// Verify client is from localhost
+			// Verify client is from localhost if localOnly is enabled
 			remoteAddr := conn.RemoteAddr().(*net.TCPAddr)
-			if !remoteAddr.IP.IsLoopback() && remoteAddr.IP.String() != "127.0.0.1" {
-				log.Printf("TCP connection rejected: non-localhost IP %s", remoteAddr.IP.String())
-				conn.Close()
-				continue
+			if s.localOnly {
+				if !remoteAddr.IP.IsLoopback() && remoteAddr.IP.String() != "127.0.0.1" {
+					log.Printf("TCP connection rejected: non-localhost IP %s", remoteAddr.IP.String())
+					conn.Close()
+					continue
+				}
 			}
 
 			// Check if already have a client
