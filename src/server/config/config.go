@@ -19,6 +19,7 @@ const (
 
 type Config struct {
 	DeviceID string `yaml:"device_id"`
+	Type     string `yaml:"type,omitempty"`
 }
 
 var (
@@ -78,6 +79,7 @@ func loadConfig() error {
 	defer cfgMu.Unlock()
 
 	path := getConfigPath()
+	fmt.Println("Config:", path)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -130,4 +132,3 @@ func saveConfigLocked(path string) error {
 	}
 	return os.Rename(tmp, path)
 }
-

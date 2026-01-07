@@ -127,6 +127,11 @@ func createPayload(localIP string, allIPs []string) Payload {
 		deviceType = "jaspermate"
 	}
 
+	// if config.Type is set, use it
+	if config.GetConfig().Type != "" {
+		deviceType = config.GetConfig().Type
+	}
+
 	return Payload{
 		DeviceID: config.GetDeviceID(),
 		LocalIP:  localIP,
