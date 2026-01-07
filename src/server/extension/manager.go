@@ -30,6 +30,9 @@ func (r *rtuWrapper) SetSlave(slave byte) {
 type ClientFactory func(handler modbus.ClientHandler) modbus.Client
 type HandlerFactory func(path string, cfg serialCfg) (ModbusHandler, error)
 
+// StateChangeCallback is called when card state changes (DI or AI values)
+type StateChangeCallback func(cards []*Card)
+
 type CardState struct {
 	Timestamp    time.Time `json:"timestamp"`
 	DI           []bool    `json:"di,omitempty"`
@@ -66,18 +69,19 @@ type writeOperation struct {
 }
 
 type Manager struct {
-	ports          map[string]*portClient
-	cards          map[string]*Card
-	mu             sync.Mutex
-	nextID         int
-	serial         serialCfg
-	timeout        time.Duration
-	cycleDelay     time.Duration    // Delay after write cycle before next loop
-	operationDelay time.Duration    // Delay between each Modbus operation (RS485)
-	writeQueue     []writeOperation // Queue of pending write operations
-	stopChan       chan struct{}    // Channel to stop background goroutine
-	clientFactory  ClientFactory    // Factory for creating modbus clients
-	handlerFactory HandlerFactory   // Factory for creating modbus handlers
+	ports               map[string]*portClient
+	cards               map[string]*Card
+	mu                  sync.Mutex
+	nextID              int
+	serial              serialCfg
+	timeout             time.Duration
+	cycleDelay          time.Duration       // Delay after write cycle before next loop
+	operationDelay      time.Duration       // Delay between each Modbus operation (RS485)
+	writeQueue          []writeOperation    // Queue of pending write operations
+	stopChan            chan struct{}       // Channel to stop background goroutine
+	clientFactory       ClientFactory       // Factory for creating modbus clients
+	handlerFactory      HandlerFactory      // Factory for creating modbus handlers
+	stateChangeCallback StateChangeCallback // Callback for state changes (DI/AI)
 }
 
 func defaultHandlerFactory(path string, cfg serialCfg) (ModbusHandler, error) {
@@ -273,6 +277,7 @@ func (m *Manager) ReadAllAndProcessWrites() []*Card {
 		return idi < idj
 	})
 
+	hasStateChange := false
 	for _, c := range cards {
 		spec := ModelTable[c.Module]
 
@@ -287,6 +292,9 @@ func (m *Manager) ReadAllAndProcessWrites() []*Card {
 			continue
 		}
 
+		// Store previous state for change detection
+		prevState := c.Last
+
 		state, err := pc.readCard(c.SlaveID, spec, false)
 		if err != nil {
 			c.Last.Error = err.Error()
@@ -297,10 +305,53 @@ func (m *Manager) ReadAllAndProcessWrites() []*Card {
 			c.Last = state
 		}
 
+		// Check if DI or AI changed
+		if !hasStateChange {
+			hasStateChange = m.detectStateChange(&prevState, &c.Last)
+		}
+
 		// Process any pending writes after each card read to minimize latency
 		m.ProcessWriteQueue()
 	}
+
+	// Call state change callback if DI or AI changed
+	if hasStateChange {
+		m.mu.Lock()
+		callback := m.stateChangeCallback
+		m.mu.Unlock()
+		if callback != nil {
+			// Get fresh copy of all cards for callback
+			callbackCards := m.GetAllCards()
+			callback(callbackCards)
+		}
+	}
+
 	return cards
+}
+
+// detectStateChange checks if DI or AI values have changed between two states
+func (m *Manager) detectStateChange(oldState, newState *CardState) bool {
+	// Check DI changes
+	if len(newState.DI) != len(oldState.DI) {
+		return true
+	}
+	for i := range newState.DI {
+		if newState.DI[i] != oldState.DI[i] {
+			return true
+		}
+	}
+
+	// Check AI changes
+	if len(newState.AI) != len(oldState.AI) {
+		return true
+	}
+	for i := range newState.AI {
+		if newState.AI[i] != oldState.AI[i] {
+			return true
+		}
+	}
+
+	return false
 }
 
 // StartCycle starts the continuous read-write cycle: interleaves reads and writes
@@ -469,4 +520,11 @@ func (m *Manager) RebootCard(cardID string) error {
 	}
 
 	return pc.reboot(c.SlaveID)
+}
+
+// SetStateChangeCallback sets a callback that will be called when card state changes (DI or AI)
+func (m *Manager) SetStateChangeCallback(callback StateChangeCallback) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.stateChangeCallback = callback
 }

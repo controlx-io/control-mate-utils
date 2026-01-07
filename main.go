@@ -20,6 +20,7 @@ import (
 	"control-mate-utils/src/server"
 	"control-mate-utils/src/server/discovery"
 	"control-mate-utils/src/server/extension"
+	"control-mate-utils/src/server/tcp"
 
 	"github.com/gorilla/mux"
 )
@@ -98,6 +99,7 @@ type App struct {
 	version        string
 	startTime      time.Time
 	extensionMgr   *extension.Manager
+	tcpServer      *tcp.TCPServer
 }
 
 var nmcliAvailable bool
@@ -119,12 +121,19 @@ func NewApp() *App {
 	// Initialize extension manager
 	extMgr := extension.InitializeManager()
 
+	// Initialize TCP server
+	tcpServer := tcp.NewTCPServer("9081", extMgr)
+	if err := tcpServer.Start(); err != nil {
+		log.Printf("Warning: Failed to start TCP server: %v", err)
+	}
+
 	return &App{
 		templates:      templates,
 		nmcliAvailable: nmcliAvailable,
 		version:        version,
 		startTime:      time.Now(),
 		extensionMgr:   extMgr,
+		tcpServer:      tcpServer,
 	}
 }
 
@@ -340,12 +349,30 @@ func (app *App) getExtensionCardsHandler(w http.ResponseWriter, r *http.Request)
 	// Use GetAllCards() instead of RefreshAll() to avoid duplicate reads
 	// The cycle already keeps cards up to date, so we just return cached data
 	cards := app.extensionMgr.GetAllCards()
-	json.NewEncoder(w).Encode(map[string]interface{}{"cards": cards})
+	tcpConnected := app.tcpServer != nil && app.tcpServer.IsConnected()
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"cards":        cards,
+		"tcpConnected": tcpConnected,
+	})
 }
 
 func (app *App) extensionCardHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	cardID := vars["id"]
+
+	// Check if TCP client is connected - if so, reject write operations
+	if app.tcpServer != nil && app.tcpServer.IsConnected() {
+		// Only reject write operations, not read operations
+		path := r.URL.Path
+		if strings.HasSuffix(path, "/write-do") || strings.HasSuffix(path, "/write-ao") ||
+			strings.HasSuffix(path, "/write-aotype") || strings.HasSuffix(path, "/reboot") {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "TCP client is connected, frontend controls are disabled",
+			})
+			return
+		}
+	}
 
 	_, ok := app.extensionMgr.GetCard(cardID)
 	if !ok {

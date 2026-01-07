@@ -61,6 +61,10 @@
 
         <!-- Main Content -->
         <div class="lg:pl-64">
+            <!-- TCP Status Banner -->
+            <div id="tcpStatusBanner" class="bg-yellow-500 text-yellow-900 px-4 py-2 text-sm font-medium text-center hidden">
+                <i data-lucide="wifi" class="h-4 w-4 inline-block mr-2"></i>TCP automation client connected - Frontend controls disabled
+            </div>
             <!-- Header -->
             <header class="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div class="container mx-auto px-4 lg:px-6 py-4">
@@ -157,6 +161,7 @@
         let currentAOCardId = null;
         let currentAOChannel = null;
         let loadCardsPending = false; // Flag to prevent concurrent requests
+        let tcpConnected = false; // Track TCP client connection status
         
         // --- DOM CACHE ---
         let cardElements = {}; // Map of cardId -> card DOM element
@@ -555,6 +560,10 @@
         }
         
         function updateDO(cardId, channel, newVal) {
+            if (tcpConnected) {
+                showNotification('TCP client is connected - Controls are disabled', 'error');
+                return;
+            }
             const state = newVal ? 'ON' : 'OFF';
             showNotification(`Card ${cardId} - DO-${channel+1}: ${state} request sent`, 'info');
             fetch(`/api/extension/cards/${cardId}/write-do`, {
@@ -562,14 +571,25 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ index: channel, state: newVal })
             })
-            .then(() => loadCards())
+            .then(res => {
+                if (!res.ok) {
+                    return res.json().then(err => {
+                        throw new Error(err.error || 'Request failed');
+                    });
+                }
+                return loadCards();
+            })
             .catch(err => {
                 console.error('Error updating DO:', err);
-                showNotification(`Card ${cardId} - Failed to update DO-${channel+1}`, 'error');
+                showNotification(`Card ${cardId} - Failed to update DO-${channel+1}: ${err.message}`, 'error');
             });
         }
 
         window.showAOControlModal = function(cardId, channel) {
+            if (tcpConnected) {
+                showNotification('TCP client is connected - Controls are disabled', 'error');
+                return;
+            }
             currentAOCardId = cardId;
             currentAOChannel = channel;
             const card = stateStore[cardId];
@@ -794,6 +814,10 @@
         };
 
         window.setAOType = function(type) {
+            if (tcpConnected) {
+                showNotification('TCP client is connected - Controls are disabled', 'error');
+                return;
+            }
             if (currentAOCardId === null || currentAOChannel === null) return;
             
             updateAOTypeButtons(type);
@@ -803,17 +827,26 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ index: currentAOChannel, mode: type })
             })
-            .then(() => {
+            .then(res => {
+                if (!res.ok) {
+                    return res.json().then(err => {
+                        throw new Error(err.error || 'Request failed');
+                    });
+                }
                 showNotification(`Card ${currentAOCardId} - AO-${currentAOChannel+1} type set to ${type}`, 'info');
-                loadCards();
+                return loadCards();
             })
             .catch(err => {
                 console.error('Error setting AO type:', err);
-                showNotification(`Card ${currentAOCardId} - Failed to set AO-${currentAOChannel+1} type`, 'error');
+                showNotification(`Card ${currentAOCardId} - Failed to set AO-${currentAOChannel+1} type: ${err.message}`, 'error');
             });
         };
 
         window.rebootCard = function(cardId) {
+            if (tcpConnected) {
+                showNotification('TCP client is connected - Controls are disabled', 'error');
+                return;
+            }
             if (!confirm(`Are you sure you want to reboot Card ${cardId}?`)) {
                 return;
             }
@@ -823,12 +856,17 @@
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'}
             })
-            .then(() => {
+            .then(res => {
+                if (!res.ok) {
+                    return res.json().then(err => {
+                        throw new Error(err.error || 'Request failed');
+                    });
+                }
                 showNotification(`Card ${cardId} - Reboot command sent successfully`, 'success');
             })
             .catch(err => {
                 console.error('Error rebooting card:', err);
-                showNotification(`Card ${cardId} - Failed to reboot`, 'error');
+                showNotification(`Card ${cardId} - Failed to reboot: ${err.message}`, 'error');
             });
         };
 
@@ -840,6 +878,10 @@
         };
 
         function commitAO(cardId, channel) {
+            if (tcpConnected) {
+                showNotification('TCP client is connected - Controls are disabled', 'error');
+                return;
+            }
             const input = document.getElementById('aoModalValue');
             let rawValue;
             
@@ -881,13 +923,18 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ index: channel, value: rawValue })
             })
-            .then(() => {
+            .then(res => {
+                if (!res.ok) {
+                    return res.json().then(err => {
+                        throw new Error(err.error || 'Request failed');
+                    });
+                }
                 hideAOControlModal();
-                loadCards();
+                return loadCards();
             })
             .catch(err => {
                 console.error('Error updating AO:', err);
-                showNotification(`Card ${cardId} - Failed to update AO-${channel+1}`, 'error');
+                showNotification(`Card ${cardId} - Failed to update AO-${channel+1}: ${err.message}`, 'error');
             });
         }
 
@@ -902,18 +949,69 @@
                 const res = await fetch('/api/extension/cards');
                 const data = await res.json();
                 
+                // Update TCP connection status
+                tcpConnected = data.tcpConnected || false;
+                updateTCPStatusIndicator();
+                
                 stateStore = {};
                 (data.cards || []).forEach(card => {
                     stateStore[card.id] = card;
                 });
                 
                 renderDashboard();
+                updateControlsState();
             } catch (err) {
                 console.error('Error loading cards:', err);
                 renderDashboard();
+                updateControlsState();
             } finally {
                 loadCardsPending = false;
             }
+        }
+
+        // Update TCP status indicator banner
+        function updateTCPStatusIndicator() {
+            const banner = document.getElementById('tcpStatusBanner');
+            if (banner) {
+                if (tcpConnected) {
+                    banner.classList.remove('hidden');
+                } else {
+                    banner.classList.add('hidden');
+                }
+            }
+        }
+
+        // Enable/disable all controls based on TCP connection status
+        function updateControlsState() {
+            const disabled = tcpConnected;
+            
+            // Disable all DO buttons
+            document.querySelectorAll('[onclick^="updateDO"]').forEach(btn => {
+                btn.disabled = disabled;
+                btn.style.opacity = disabled ? '0.5' : '1';
+                btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+            });
+            
+            // Disable all AO SET buttons
+            document.querySelectorAll('[onclick^="showAOControlModal"]').forEach(btn => {
+                btn.disabled = disabled;
+                btn.style.opacity = disabled ? '0.5' : '1';
+                btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+            });
+            
+            // Disable all reboot buttons
+            document.querySelectorAll('.btn-reboot').forEach(btn => {
+                btn.disabled = disabled;
+                btn.style.opacity = disabled ? '0.5' : '1';
+                btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+            });
+            
+            // Disable AO type buttons in modal
+            document.querySelectorAll('#aoType4-20mA, #aoType0-10V').forEach(btn => {
+                btn.disabled = disabled;
+                btn.style.opacity = disabled ? '0.5' : '1';
+                btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+            });
         }
 
         // Modal event listeners
