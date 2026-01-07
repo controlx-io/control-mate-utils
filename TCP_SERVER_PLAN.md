@@ -53,6 +53,8 @@ flowchart TB
 
 - JSON message protocol
 
+- Server identification via welcome message sent immediately on connection
+
 - Periodic updates (500ms interval) for all card data
 
 - Immediate updates on value changes (DI, AI fields) via callback from extension manager
@@ -65,7 +67,7 @@ flowchart TB
 
 - `ClientConnection` struct to manage connected client
 
-- Message types: `CardStateUpdate`, `WriteCommand`, `WriteResponse`
+- Message types: `CardStateUpdate`, `WriteCommand`, `WriteResponse`, `WelcomeMessage`
 
 - Change detection for DI and AI fields
 
@@ -74,6 +76,10 @@ flowchart TB
 - **IP address validation for localhost-only access**
 
 - `onStateChange()` callback method for immediate updates on DI/AI changes
+
+- `sendWelcomeMessage()` method to identify server to clients on connection
+
+- `sendWelcomeMessage()` method to identify server to clients on connection
 
 ### 2. Connection State Management
 
@@ -141,7 +147,19 @@ flowchart TB
 
 ### 7. Message Protocol
 
-**Server to Client (TCP - JSON):**
+**Server to Client - Welcome Message (sent immediately on connection):**
+
+```json
+{
+  "type": "welcome",
+  "server": "ControlMate Extension Cards Server",
+  "version": "1.0.0",
+  "protocol": "JSON",
+  "description": "Extension cards automation server - sends card state updates and accepts write commands"
+}
+```
+
+**Server to Client - Card Update (TCP - JSON):**
 
 ```json
 {
@@ -234,24 +252,28 @@ flowchart TB
 
 2. Implement message protocol (JSON serialization/deserialization)
 
-3. Add periodic update mechanism (500ms)
+3. Add welcome message for server identification on connection
 
-4. Implement change detection for DI/AI in extension manager with callback mechanism
+4. Add periodic update mechanism (500ms)
 
-5. Register TCP server callback in extension manager for immediate updates
+5. Implement change detection for DI/AI in extension manager with callback mechanism
 
-6. Add write command handling with change filtering
+6. Register TCP server callback in extension manager for immediate updates
 
-7. Integrate with HTTP handlers (connection state checks)
+7. Add write command handling with change filtering
 
-8. Add frontend TCP status polling and UI disabling
-9. Testing and refinement (including localhost restriction validation)
+8. Integrate with HTTP handlers (connection state checks)
+
+9. Add frontend TCP status polling and UI disabling
+10. Testing and refinement (including localhost restriction validation and server identification)
 
 ## Testing Considerations
 
 - Test single client connection (reject second client)
 
 - **Test localhost-only restriction (reject connections from non-localhost IPs)**
+
+- Test welcome message sent immediately on connection (server identification)
 
 - Test periodic updates (500ms interval)
 

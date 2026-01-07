@@ -20,6 +20,7 @@ type TCPServer struct {
 	extensionMgr *extension.Manager
 	stopChan     chan struct{}
 	port         string
+	version      string
 }
 
 // ClientConnection represents a connected TCP client
@@ -35,6 +36,15 @@ type ClientConnection struct {
 type CardUpdateMessage struct {
 	Type  string            `json:"type"`
 	Cards []*extension.Card `json:"cards"`
+}
+
+// WelcomeMessage is sent to clients when they connect
+type WelcomeMessage struct {
+	Type        string `json:"type"`
+	Server      string `json:"server"`
+	Version     string `json:"version,omitempty"`
+	Protocol    string `json:"protocol"`
+	Description string `json:"description"`
 }
 
 // WriteCommand is received from TCP clients
@@ -55,11 +65,12 @@ type WriteResponse struct {
 }
 
 // NewTCPServer creates a new TCP server instance
-func NewTCPServer(port string, extensionMgr *extension.Manager) *TCPServer {
+func NewTCPServer(port string, extensionMgr *extension.Manager, version string) *TCPServer {
 	return &TCPServer{
 		extensionMgr: extensionMgr,
 		stopChan:     make(chan struct{}),
 		port:         port,
+		version:      version,
 	}
 }
 
@@ -161,6 +172,9 @@ func (s *TCPServer) acceptLoop() {
 			s.mu.Unlock()
 
 			log.Printf("TCP client connected from %s", remoteAddr.String())
+
+			// Send welcome message to identify server
+			s.sendWelcomeMessage(clientConn)
 
 			// Handle client in separate goroutine
 			go s.handleClient(clientConn)
@@ -384,6 +398,24 @@ func (s *TCPServer) updateLoop() {
 				s.sendUpdate(clientConn, cards)
 			}
 		}
+	}
+}
+
+// sendWelcomeMessage sends a welcome/identification message to newly connected client
+func (s *TCPServer) sendWelcomeMessage(clientConn *ClientConnection) {
+	clientConn.mu.Lock()
+	defer clientConn.mu.Unlock()
+
+	msg := WelcomeMessage{
+		Type:        "welcome",
+		Server:      "ControlMate TCP Server",
+		Version:     s.version,
+		Protocol:    "JSON",
+		Description: "ControlMate Extension cards TCP server - sends card state updates and accepts write commands",
+	}
+
+	if err := clientConn.encoder.Encode(msg); err != nil {
+		log.Printf("TCP: failed to send welcome message: %v", err)
 	}
 }
 
