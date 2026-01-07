@@ -91,6 +91,10 @@ type TemplateData struct {
 	ActiveNav   string
 	Version     string
 	PageContent string
+	DeviceName  string
+	Subtitle    string
+	ActivePage  string
+	SidebarIcon string
 }
 
 type App struct {
@@ -111,6 +115,14 @@ func readVersion() string {
 	}
 
 	return strings.TrimSpace(string(data))
+}
+
+func getDeviceName() string {
+	deviceType := discovery.GetDeviceType()
+	if deviceType == "jaspermate" {
+		return "JasperMate"
+	}
+	return "ControlMate"
 }
 
 func NewApp() *App {
@@ -138,11 +150,16 @@ func NewApp() *App {
 }
 
 func (app *App) homeHandler(w http.ResponseWriter, r *http.Request) {
+	deviceName := getDeviceName()
 	data := TemplateData{
-		Title:       "ControlMate Utils",
+		Title:       "Network Utils - " + deviceName,
 		ActiveNav:   "network",
 		Version:     app.version,
 		PageContent: "network",
+		DeviceName:  deviceName,
+		Subtitle:    "Network Utils",
+		ActivePage:  "index",
+		SidebarIcon: "wifi",
 	}
 	app.templates.ExecuteTemplate(w, "index.html", data)
 }
@@ -299,31 +316,46 @@ func (app *App) getSystemHealthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) processesHandler(w http.ResponseWriter, r *http.Request) {
+	deviceName := getDeviceName()
 	data := TemplateData{
-		Title:       "Processes - ControlMate Utils",
+		Title:       "Processes Utils - " + deviceName,
 		ActiveNav:   "processes",
 		Version:     app.version,
 		PageContent: "processes",
+		DeviceName:  deviceName,
+		Subtitle:    "Processes Utils",
+		ActivePage:  "processes",
+		SidebarIcon: "activity",
 	}
 	app.templates.ExecuteTemplate(w, "processes.html", data)
 }
 
 func (app *App) systemHandler(w http.ResponseWriter, r *http.Request) {
+	deviceName := getDeviceName()
 	data := TemplateData{
-		Title:       "System - ControlMate Utils",
+		Title:       "System Utils - " + deviceName,
 		ActiveNav:   "system",
 		Version:     app.version,
 		PageContent: "system",
+		DeviceName:  deviceName,
+		Subtitle:    "System Utils",
+		ActivePage:  "system",
+		SidebarIcon: "settings",
 	}
 	app.templates.ExecuteTemplate(w, "system.html", data)
 }
 
 func (app *App) extensionHandler(w http.ResponseWriter, r *http.Request) {
+	deviceName := getDeviceName()
 	data := TemplateData{
-		Title:       "Extensions - ControlMate Utils",
+		Title:       "Extensions Utils - " + deviceName,
 		ActiveNav:   "extensions",
 		Version:     app.version,
 		PageContent: "extensions",
+		DeviceName:  deviceName,
+		Subtitle:    "Extensions Utils",
+		ActivePage:  "extensions",
+		SidebarIcon: "cpu",
 	}
 	app.templates.ExecuteTemplate(w, "extension.html", data)
 }

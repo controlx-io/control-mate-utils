@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"control-mate-utils/src/server"
@@ -18,7 +19,11 @@ const (
 	reportInterval   = 5 * time.Minute
 )
 
-var serverURL = defaultServerURL
+var (
+	serverURL      = defaultServerURL
+	deviceType     string
+	deviceTypeOnce sync.Once
+)
 
 func init() {
 	if url := util.LoadEnvLocal("JASPER_MATE_URL"); url != "" {
@@ -113,6 +118,23 @@ var getAllNetworkIPs = func() []string {
 	return allIPs
 }
 
+// GetDeviceType returns the device type (controlmate or jaspermate)
+// The result is cached after the first call for performance
+func GetDeviceType() string {
+	deviceTypeOnce.Do(func() {
+		deviceType = "controlmate"
+		if server.IsJasperMate() {
+			deviceType = "jaspermate"
+		}
+
+		// Config override
+		if config.GetConfig().Type != "" {
+			deviceType = config.GetConfig().Type
+		}
+	})
+	return deviceType
+}
+
 func createPayload(localIP string, allIPs []string) Payload {
 	// Separate local IP from other IPs
 	var otherIPs []string
@@ -122,21 +144,11 @@ func createPayload(localIP string, allIPs []string) Payload {
 		}
 	}
 
-	deviceType := "controlmate"
-	if server.IsJasperMate() {
-		deviceType = "jaspermate"
-	}
-
-	// if config.Type is set, use it
-	if config.GetConfig().Type != "" {
-		deviceType = config.GetConfig().Type
-	}
-
 	return Payload{
 		DeviceID: config.GetDeviceID(),
 		LocalIP:  localIP,
 		OtherIPs: otherIPs,
-		Type:     deviceType,
+		Type:     GetDeviceType(),
 	}
 }
 
