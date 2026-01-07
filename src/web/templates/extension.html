@@ -14,10 +14,6 @@
 
         <!-- Main Content -->
         <div class="lg:pl-64">
-            <!-- TCP Status Banner -->
-            <div id="tcpStatusBanner" class="bg-yellow-500 text-yellow-900 px-4 py-2 text-sm font-medium text-center hidden">
-                <i data-lucide="wifi" class="h-4 w-4 inline-block mr-2"></i>TCP automation client connected - Frontend controls disabled
-            </div>
             <!-- Header -->
             <header class="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div class="container mx-auto px-4 lg:px-6 py-4">
@@ -27,7 +23,14 @@
                                 <i data-lucide="menu" class="h-5 w-5"></i>
                             </button>
                             <div>
-                                <h1 class="text-2xl lg:text-3xl font-bold tracking-tight">Extensions</h1>
+                                <div class="flex items-center gap-3">
+                                    <h1 class="text-2xl lg:text-3xl font-bold tracking-tight">Extensions</h1>
+                                    <div id="tcpStatusBanner" class="hidden">
+                                        <span class="inline-flex items-center rounded-full bg-red-500 dark:bg-red-600 px-3 py-1 text-xs font-medium text-white cursor-help" title="JasperNode connected">
+                                            Control disabled
+                                        </span>
+                                    </div>
+                                </div>
                                 <p class="text-sm lg:text-base text-muted-foreground hidden sm:block">Monitor and control extension cards</p>
                             </div>
                         </div>
@@ -196,7 +199,7 @@
                 <div class="card-header">
                     <div class="flex-1">
                         <div class="card-title">Card ${card.id}</div>
-                        <div class="card-model">ID: ${card.id} &bull; ${card.module.replace('USR-', '')}</div>
+                        <div class="card-model">ID: ${card.id} &bull; ${card.module}</div>
                         <div class="card-sn">SN: ${sn}</div>
                         <div class="card-timestamp">Updated: ${timestamp}</div>
                     </div>
@@ -772,6 +775,11 @@
                 return;
             }
             if (currentAOCardId === null || currentAOChannel === null) return;
+            
+            // Show confirmation dialog
+            if (!confirm(`Are you sure you want to change Card ${currentAOCardId} - AO-${currentAOChannel+1} output type to ${type}?\n\nNote: Reboot card is required to take effect.`)) {
+                return;
+            }
             
             updateAOTypeButtons(type);
             

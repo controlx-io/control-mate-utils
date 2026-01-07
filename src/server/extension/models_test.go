@@ -7,11 +7,11 @@ func TestGuessModel(t *testing.T) {
 		di, do, ai, ao int
 		expected       string
 	}{
-		{4, 4, 0, 0, "USR-IO4040"},
-		{0, 4, 4, 0, "USR-IO0440"},
-		{0, 8, 0, 0, "USR-IO0080"},
-		{8, 0, 0, 0, "USR-IO8000"},
-		{0, 0, 4, 4, "USR-IO0404"},
+		{4, 4, 0, 0, "IO4040"},
+		{0, 4, 4, 0, "IO0440"},
+		{0, 8, 0, 0, "IO0080"},
+		{8, 0, 0, 0, "IO8000"},
+		{0, 0, 4, 4, "IO0404"},
 		{0, 0, 0, 0, "Unknown"},
 		{1, 1, 1, 1, "Unknown"},
 	}
@@ -24,4 +24,3 @@ func TestGuessModel(t *testing.T) {
 		}
 	}
 }
-

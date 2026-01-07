@@ -99,7 +99,7 @@ func NewManager() *Manager {
 		cards:          make(map[string]*Card),
 		nextID:         1,
 		serial:         serialCfg{Baud: 9600, Par: "N", Stop: 1, Data: 8},
-		timeout:        50 * time.Millisecond,
+		timeout:        200 * time.Millisecond,
 		cycleDelay:     1 * time.Millisecond,
 		operationDelay: 1 * time.Millisecond,
 		writeQueue:     make([]writeOperation, 0),
