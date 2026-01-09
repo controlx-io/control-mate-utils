@@ -1,4 +1,4 @@
-{{define "extension.html"}}
+{{define "local-io.html"}}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -24,14 +24,14 @@
                             </button>
                             <div>
                                 <div class="flex items-center gap-3">
-                                    <h1 class="text-2xl lg:text-3xl font-bold tracking-tight">Extensions</h1>
+                                    <h1 class="text-2xl lg:text-3xl font-bold tracking-tight">Local IO</h1>
                                     <div id="tcpStatusBanner" class="hidden">
                                         <span class="inline-flex items-center rounded-full bg-red-500 dark:bg-red-600 px-3 py-1 text-xs font-medium text-white cursor-help" title="JasperNode connected">
                                             Control disabled
                                         </span>
                                     </div>
                                 </div>
-                                <p class="text-sm lg:text-base text-muted-foreground hidden sm:block">Monitor and control extension cards</p>
+                                <p class="text-sm lg:text-base text-muted-foreground hidden sm:block">Monitor and control local IO cards</p>
                             </div>
                         </div>
                         <div class="flex items-center space-x-2 lg:space-x-4">
@@ -526,7 +526,7 @@
             }
             const state = newVal ? 'ON' : 'OFF';
             showNotification(`Card ${cardId} - DO-${channel+1}: ${state} request sent`, 'info');
-            fetch(`/api/extension/cards/${cardId}/write-do`, {
+            fetch(`/api/local-io/${cardId}/write-do`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ index: channel, state: newVal })
@@ -800,7 +800,7 @@
             
             updateAOTypeButtons(type);
             
-            fetch(`/api/extension/cards/${currentAOCardId}/write-aotype`, {
+            fetch(`/api/local-io/${currentAOCardId}/write-aotype`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ index: currentAOChannel, mode: type })
@@ -830,7 +830,7 @@
             }
             
             showNotification(`Card ${cardId} - Reboot request sent`, 'info');
-            fetch(`/api/extension/cards/${cardId}/reboot`, {
+            fetch(`/api/local-io/${cardId}/reboot`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'}
             })
@@ -896,7 +896,7 @@
             
             // Always send raw value to backend
             showNotification(`Card ${cardId} - AO-${channel+1} write request sent (raw: ${rawValue})`, 'info');
-            fetch(`/api/extension/cards/${cardId}/write-ao`, {
+            fetch(`/api/local-io/${cardId}/write-ao`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ index: channel, value: rawValue })
@@ -924,7 +924,7 @@
             
             loadCardsPending = true;
             try {
-                const res = await fetch('/api/extension/cards');
+                const res = await fetch('/api/local-io');
                 const data = await res.json();
                 
                 // Update TCP connection status
@@ -1012,7 +1012,7 @@
                     }
                     
                     // Show confirmation dialog
-                    if (!confirm('Are you sure you want to re-discover extension cards? This will reset all cards and re-detect them.')) {
+                    if (!confirm('Are you sure you want to re-discover local IO cards? This will reset all cards and re-detect them.')) {
                         return;
                     }
                     
@@ -1021,16 +1021,16 @@
                     rediscoverBtn.querySelector('span').textContent = 'Detecting...';
                     rediscoverPending = true;
                     try {
-                        const res = await fetch('/api/extension/cards/rediscover', { method: 'POST' });
+                        const res = await fetch('/api/local-io/rediscover', { method: 'POST' });
                         if (!res.ok) {
                             throw new Error(`HTTP ${res.status}`);
                         }
                         await res.json();
-                        showNotification('Extension cards re-detected successfully', 'success');
+                        showNotification('Local IO cards re-detected successfully', 'success');
                         loadCards();
                     } catch (err) {
                         console.error('Error rediscovering cards:', err);
-                        showNotification('Failed to re-detect extension cards', 'error');
+                        showNotification('Failed to re-detect local IO cards', 'error');
                     } finally {
                         rediscoverBtn.disabled = false;
                         rediscoverBtn.querySelector('span').textContent = originalText;

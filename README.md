@@ -135,7 +135,7 @@ control-mate-utils/
 │   ├── server/
 │   │   ├── discovery/             # Discovery agent
 │   │   │   └── agent.go
-│   │   └── extension/             # Extension card management
+│   │   └── localio/               # Local IO card management
 │   │       ├── index.go
 │   │       ├── manager.go
 │   │       ├── models.go
@@ -145,7 +145,7 @@ control-mate-utils/
 │       │   ├── app.js             # Frontend JavaScript
 │       │   └── styles.css         # Tailwind CSS source
 │       ├── templates/             # HTML templates
-│       │   ├── extension.html
+│       │   ├── local-io.html
 │       │   ├── index.html
 │       │   ├── processes.html
 │       │   └── system.html

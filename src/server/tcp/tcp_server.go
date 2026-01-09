@@ -9,15 +9,15 @@ import (
 	"sync"
 	"time"
 
-	"control-mate-utils/src/server/extension"
+	"control-mate-utils/src/server/localio"
 )
 
-// TCPServer manages TCP connections for extension card automation
+// TCPServer manages TCP connections for local IO card automation
 type TCPServer struct {
 	listener     net.Listener
 	clientConn   *ClientConnection
 	mu           sync.RWMutex
-	extensionMgr *extension.Manager
+	localioMgr   *localio.Manager
 	stopChan     chan struct{}
 	port         string
 	version      string
@@ -29,14 +29,14 @@ type ClientConnection struct {
 	conn     net.Conn
 	writer   *bufio.Writer
 	encoder  *json.Encoder
-	lastSent map[string]*extension.CardState // Track last sent state for change detection
+	lastSent map[string]*localio.CardState // Track last sent state for change detection
 	mu       sync.Mutex
 }
 
 // CardUpdateMessage is sent to TCP clients
 type CardUpdateMessage struct {
 	Type  string            `json:"type"`
-	Cards []*extension.Card `json:"cards"`
+	Cards []*localio.Card `json:"cards"`
 }
 
 // WelcomeMessage is sent to clients when they connect
@@ -67,13 +67,13 @@ type WriteResponse struct {
 
 // NewTCPServer creates a new TCP server instance
 // localOnly: if true, only accept connections from localhost (default: true for security)
-func NewTCPServer(port string, extensionMgr *extension.Manager, version string, localOnly bool) *TCPServer {
+func NewTCPServer(port string, localioMgr *localio.Manager, version string, localOnly bool) *TCPServer {
 	return &TCPServer{
-		extensionMgr: extensionMgr,
-		stopChan:     make(chan struct{}),
-		port:         port,
-		version:      version,
-		localOnly:    localOnly,
+		localioMgr: localioMgr,
+		stopChan:   make(chan struct{}),
+		port:       port,
+		version:    version,
+		localOnly:  localOnly,
 	}
 }
 
@@ -98,7 +98,7 @@ func (s *TCPServer) Start() error {
 	}
 
 	// Register callback for immediate updates on DI/AI changes
-	s.extensionMgr.SetStateChangeCallback(s.onStateChange)
+	s.localioMgr.SetStateChangeCallback(s.onStateChange)
 
 	go s.acceptLoop()
 	go s.updateLoop()
@@ -107,7 +107,7 @@ func (s *TCPServer) Start() error {
 }
 
 // onStateChange is called immediately when DI or AI values change
-func (s *TCPServer) onStateChange(cards []*extension.Card) {
+func (s *TCPServer) onStateChange(cards []*localio.Card) {
 	s.mu.RLock()
 	clientConn := s.clientConn
 	s.mu.RUnlock()
@@ -180,7 +180,7 @@ func (s *TCPServer) acceptLoop() {
 				conn:     conn,
 				writer:   bufio.NewWriter(conn),
 				encoder:  json.NewEncoder(conn),
-				lastSent: make(map[string]*extension.CardState),
+				lastSent: make(map[string]*localio.CardState),
 			}
 			s.clientConn = clientConn
 			s.mu.Unlock()
@@ -233,7 +233,7 @@ func (s *TCPServer) processWriteCommand(cmd *WriteCommand, clientConn *ClientCon
 	switch cmd.Type {
 	case "write-do":
 		// Check if value actually changed
-		card, ok := s.extensionMgr.GetCard(cmd.CardID)
+		card, ok := s.localioMgr.GetCard(cmd.CardID)
 		if !ok {
 			response = WriteResponse{
 				Type:    "write-response",
@@ -259,7 +259,7 @@ func (s *TCPServer) processWriteCommand(cmd *WriteCommand, clientConn *ClientCon
 			}
 		}
 
-		err = s.extensionMgr.QueueWriteDO(cmd.CardID, cmd.Index, cmd.State)
+		err = s.localioMgr.QueueWriteDO(cmd.CardID, cmd.Index, cmd.State)
 		if err == nil {
 			response = WriteResponse{
 				Type:    "write-response",
@@ -276,7 +276,7 @@ func (s *TCPServer) processWriteCommand(cmd *WriteCommand, clientConn *ClientCon
 
 	case "write-ao":
 		// Check if value actually changed
-		card, ok := s.extensionMgr.GetCard(cmd.CardID)
+		card, ok := s.localioMgr.GetCard(cmd.CardID)
 		if !ok {
 			response = WriteResponse{
 				Type:    "write-response",
@@ -302,7 +302,7 @@ func (s *TCPServer) processWriteCommand(cmd *WriteCommand, clientConn *ClientCon
 			}
 		}
 
-		err = s.extensionMgr.QueueWriteAO(cmd.CardID, cmd.Index, cmd.Value)
+		err = s.localioMgr.QueueWriteAO(cmd.CardID, cmd.Index, cmd.Value)
 		if err == nil {
 			response = WriteResponse{
 				Type:    "write-response",
@@ -319,7 +319,7 @@ func (s *TCPServer) processWriteCommand(cmd *WriteCommand, clientConn *ClientCon
 
 	case "write-aotype":
 		// Check if AO type actually changed
-		card, ok := s.extensionMgr.GetCard(cmd.CardID)
+		card, ok := s.localioMgr.GetCard(cmd.CardID)
 		if !ok {
 			response = WriteResponse{
 				Type:    "write-response",
@@ -345,7 +345,7 @@ func (s *TCPServer) processWriteCommand(cmd *WriteCommand, clientConn *ClientCon
 			}
 		}
 
-		err = s.extensionMgr.QueueWriteAOType(cmd.CardID, cmd.Index, cmd.Mode)
+		err = s.localioMgr.QueueWriteAOType(cmd.CardID, cmd.Index, cmd.Mode)
 		if err == nil {
 			response = WriteResponse{
 				Type:    "write-response",
@@ -361,7 +361,7 @@ func (s *TCPServer) processWriteCommand(cmd *WriteCommand, clientConn *ClientCon
 		}
 
 	case "reboot":
-		err = s.extensionMgr.RebootCard(cmd.CardID)
+		err = s.localioMgr.RebootCard(cmd.CardID)
 		if err == nil {
 			response = WriteResponse{
 				Type:    "write-response",
@@ -407,7 +407,7 @@ func (s *TCPServer) updateLoop() {
 			}
 
 			// Get current cards and send periodic update
-			cards := s.extensionMgr.GetAllCards()
+			cards := s.localioMgr.GetAllCards()
 			if len(cards) > 0 {
 				s.sendUpdate(clientConn, cards)
 			}
@@ -434,7 +434,7 @@ func (s *TCPServer) sendWelcomeMessage(clientConn *ClientConnection) {
 }
 
 // sendUpdate sends card update to TCP client
-func (s *TCPServer) sendUpdate(clientConn *ClientConnection, cards []*extension.Card) {
+func (s *TCPServer) sendUpdate(clientConn *ClientConnection, cards []*localio.Card) {
 	clientConn.mu.Lock()
 	defer clientConn.mu.Unlock()
 

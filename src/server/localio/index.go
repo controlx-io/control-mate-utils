@@ -1,4 +1,4 @@
-package extension
+package localio
 
 import "log"
 
@@ -20,9 +20,9 @@ func InitializeManager() *Manager {
 	// Only start continuous read-write cycle if at least one card was discovered
 	if discovered > 0 {
 		mgr.StartCycle()
-		log.Printf("started extension read-write cycle (%d card(s) discovered)", discovered)
+		log.Printf("started local IO read-write cycle (%d card(s) discovered)", discovered)
 	} else {
-		log.Printf("no extension cards discovered on %s; skipping read-write cycle", portPath)
+		log.Printf("no local IO cards discovered on %s; skipping read-write cycle", portPath)
 	}
 
 	return mgr

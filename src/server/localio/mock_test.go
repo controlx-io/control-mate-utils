@@ -1,4 +1,4 @@
-package extension
+package localio
 
 import (
 	"github.com/goburrow/modbus"

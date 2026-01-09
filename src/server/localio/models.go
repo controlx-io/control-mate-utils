@@ -1,4 +1,4 @@
-package extension
+package localio
 
 type ModelSpec struct {
 	Name string `json:"name"`

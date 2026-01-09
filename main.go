@@ -19,7 +19,7 @@ import (
 
 	"control-mate-utils/src/server"
 	"control-mate-utils/src/server/discovery"
-	"control-mate-utils/src/server/extension"
+	"control-mate-utils/src/server/localio"
 	"control-mate-utils/src/server/tcp"
 
 	"github.com/gorilla/mux"
@@ -102,7 +102,7 @@ type App struct {
 	nmcliAvailable bool
 	version        string
 	startTime      time.Time
-	extensionMgr   *extension.Manager
+	localioMgr     *localio.Manager
 	tcpServer      *tcp.TCPServer
 }
 
@@ -130,8 +130,8 @@ func NewApp() *App {
 	nmcliAvailable = server.CheckNmcliAvailable()
 	version := readVersion()
 
-	// Initialize extension manager
-	extMgr := extension.InitializeManager()
+	// Initialize local IO manager
+	extMgr := localio.InitializeManager()
 
 	// Initialize TCP server (localOnly=false for testing - accepts connections from all IPs)
 	tcpServer := tcp.NewTCPServer("9081", extMgr, version, true)
@@ -144,7 +144,7 @@ func NewApp() *App {
 		nmcliAvailable: nmcliAvailable,
 		version:        version,
 		startTime:      time.Now(),
-		extensionMgr:   extMgr,
+		localioMgr:     extMgr,
 		tcpServer:      tcpServer,
 	}
 }
@@ -345,42 +345,42 @@ func (app *App) systemHandler(w http.ResponseWriter, r *http.Request) {
 	app.templates.ExecuteTemplate(w, "system.html", data)
 }
 
-func (app *App) extensionHandler(w http.ResponseWriter, r *http.Request) {
+func (app *App) localIOHandler(w http.ResponseWriter, r *http.Request) {
 	deviceName := getDeviceName()
 	data := TemplateData{
-		Title:       "Extensions Utils - " + deviceName,
-		ActiveNav:   "extensions",
+		Title:       "Local IO Utils - " + deviceName,
+		ActiveNav:   "local-io",
 		Version:     app.version,
-		PageContent: "extensions",
+		PageContent: "local-io",
 		DeviceName:  deviceName,
-		Subtitle:    "Extensions Utils",
-		ActivePage:  "extensions",
+		Subtitle:    "Local IO Utils",
+		ActivePage:  "local-io",
 		SidebarIcon: "cpu",
 	}
-	app.templates.ExecuteTemplate(w, "extension.html", data)
+	app.templates.ExecuteTemplate(w, "local-io.html", data)
 }
 
-func (app *App) rediscoverExtensionCardsHandler(w http.ResponseWriter, r *http.Request) {
+func (app *App) rediscoverLocalIOCardsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// Stop existing manager cycle if present
-	if app.extensionMgr != nil {
-		app.extensionMgr.StopCycle()
+	if app.localioMgr != nil {
+		app.localioMgr.StopCycle()
 	}
 
 	// Re-initialize manager (performs auto-discovery and conditionally starts cycle)
-	app.extensionMgr = extension.InitializeManager()
+	app.localioMgr = localio.InitializeManager()
 
 	// Return current cards after rediscovery
-	cards := app.extensionMgr.RefreshAll()
+	cards := app.localioMgr.RefreshAll()
 	json.NewEncoder(w).Encode(map[string]interface{}{"cards": cards})
 }
 
-func (app *App) getExtensionCardsHandler(w http.ResponseWriter, r *http.Request) {
+func (app *App) getLocalIOCardsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	// Use GetAllCards() instead of RefreshAll() to avoid duplicate reads
 	// The cycle already keeps cards up to date, so we just return cached data
-	cards := app.extensionMgr.GetAllCards()
+	cards := app.localioMgr.GetAllCards()
 	tcpConnected := app.tcpServer != nil && app.tcpServer.IsConnected()
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"cards":        cards,
@@ -388,7 +388,7 @@ func (app *App) getExtensionCardsHandler(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-func (app *App) extensionCardHandler(w http.ResponseWriter, r *http.Request) {
+func (app *App) localIOCardHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	cardID := vars["id"]
 
@@ -406,7 +406,7 @@ func (app *App) extensionCardHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_, ok := app.extensionMgr.GetCard(cardID)
+	_, ok := app.localioMgr.GetCard(cardID)
 	if !ok {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]string{"error": "card not found"})
@@ -430,7 +430,7 @@ func (app *App) extensionCardHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("writing DO request received for card=%s index=%d state=%v", cardID, req.Index, req.State)
-		if err := app.extensionMgr.QueueWriteDO(cardID, req.Index, req.State); err != nil {
+		if err := app.localioMgr.QueueWriteDO(cardID, req.Index, req.State); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
@@ -451,7 +451,7 @@ func (app *App) extensionCardHandler(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(map[string]string{"error": "invalid body"})
 			return
 		}
-		if err := app.extensionMgr.QueueWriteAO(cardID, req.Index, req.Value); err != nil {
+		if err := app.localioMgr.QueueWriteAO(cardID, req.Index, req.Value); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
@@ -472,7 +472,7 @@ func (app *App) extensionCardHandler(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(map[string]string{"error": "invalid body"})
 			return
 		}
-		if err := app.extensionMgr.QueueWriteAOType(cardID, req.Index, req.Mode); err != nil {
+		if err := app.localioMgr.QueueWriteAOType(cardID, req.Index, req.Mode); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
@@ -484,7 +484,7 @@ func (app *App) extensionCardHandler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		if err := app.extensionMgr.RebootCard(cardID); err != nil {
+		if err := app.localioMgr.RebootCard(cardID); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
@@ -908,7 +908,7 @@ func main() {
 	r.HandleFunc("/", app.homeHandler).Methods("GET")
 	r.HandleFunc("/processes", app.processesHandler).Methods("GET")
 	r.HandleFunc("/system", app.systemHandler).Methods("GET")
-	r.HandleFunc("/extensions", app.extensionHandler).Methods("GET")
+	r.HandleFunc("/local-io", app.localIOHandler).Methods("GET")
 	r.HandleFunc("/api/version", app.getVersionHandler).Methods("GET")
 	r.HandleFunc("/api/health", app.getSystemHealthHandler).Methods("GET")
 	r.HandleFunc("/api/nmcli/status", app.getNmcliStatusHandler).Methods("GET")
@@ -920,12 +920,12 @@ func main() {
 	r.HandleFunc("/api/wifi/connect", app.connectWiFiHandler).Methods("POST")
 	r.HandleFunc("/api/processes", app.getProcessesHandler).Methods("GET")
 	r.HandleFunc("/api/system/reboot", app.rebootHandler).Methods("POST")
-	r.HandleFunc("/api/extension/cards", app.getExtensionCardsHandler).Methods("GET")
-	r.HandleFunc("/api/extension/cards/rediscover", app.rediscoverExtensionCardsHandler).Methods("POST")
-	r.HandleFunc("/api/extension/cards/{id}/write-do", app.extensionCardHandler).Methods("POST")
-	r.HandleFunc("/api/extension/cards/{id}/write-ao", app.extensionCardHandler).Methods("POST")
-	r.HandleFunc("/api/extension/cards/{id}/write-aotype", app.extensionCardHandler).Methods("POST")
-	r.HandleFunc("/api/extension/cards/{id}/reboot", app.extensionCardHandler).Methods("POST")
+	r.HandleFunc("/api/local-io", app.getLocalIOCardsHandler).Methods("GET")
+	r.HandleFunc("/api/local-io/rediscover", app.rediscoverLocalIOCardsHandler).Methods("POST")
+	r.HandleFunc("/api/local-io/{id}/write-do", app.localIOCardHandler).Methods("POST")
+	r.HandleFunc("/api/local-io/{id}/write-ao", app.localIOCardHandler).Methods("POST")
+	r.HandleFunc("/api/local-io/{id}/write-aotype", app.localIOCardHandler).Methods("POST")
+	r.HandleFunc("/api/local-io/{id}/reboot", app.localIOCardHandler).Methods("POST")
 
 	fmt.Println("ControlMate Utils starting on :9080")
 	log.Fatal(http.ListenAndServe(":9080", r))
