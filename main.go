@@ -892,9 +892,6 @@ func main() {
 	// Set process title for better identification in process lists
 	os.Args[0] = "cm-utils"
 
-	// Start discovery agent
-	discovery.Start()
-
 	app := NewApp()
 
 	r := mux.NewRouter()
