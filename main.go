@@ -133,8 +133,8 @@ func NewApp() *App {
 	// Initialize extension manager
 	extMgr := extension.InitializeManager()
 
-	// Initialize TCP server
-	tcpServer := tcp.NewTCPServer("9081", extMgr, version)
+	// Initialize TCP server (localOnly=false for testing - accepts connections from all IPs)
+	tcpServer := tcp.NewTCPServer("9081", extMgr, version, true)
 	if err := tcpServer.Start(); err != nil {
 		log.Printf("Warning: Failed to start TCP server: %v", err)
 	}

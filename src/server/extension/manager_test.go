@@ -91,7 +91,7 @@ func TestManager_AddCard(t *testing.T) {
 		return &MockClient{
 			ReadInputRegistersFunc: func(address, quantity uint16) ([]byte, error) {
 				// Mock probing behavior: 8 regs = 16 bytes.
-				// For USR-IO4040: DI=4, DO=4, AI=0, AO=0.
+				// For IO4040: DI=4, DO=4, AI=0, AO=0.
 				// Probing:
 				// probeDI (8) -> fail?
 				// The probe functions try to read different things.
@@ -106,7 +106,7 @@ func TestManager_AddCard(t *testing.T) {
 	// We need the readCard to succeed to populate Last.
 	// But readCard will call ReadDiscreteInputs etc depending on module.
 
-	// Let's assume USR-IO4040 (DI=4, DO=4)
+	// Let's assume IO4040 (DI=4, DO=4)
 	mgr.clientFactory = func(h modbus.ClientHandler) modbus.Client {
 		return &MockClient{
 			ReadDiscreteInputsFunc: func(address, quantity uint16) ([]byte, error) {
@@ -127,13 +127,13 @@ func TestManager_AddCard(t *testing.T) {
 		}
 	}
 
-	card, err := mgr.AddCard("/dev/ttyUSB0", 1, "USR-IO4040")
+	card, err := mgr.AddCard("/dev/ttyUSB0", 1, "IO4040")
 	if err != nil {
 		t.Fatalf("AddCard failed: %v", err)
 	}
 
-	if card.Module != "USR-IO4040" {
-		t.Errorf("Expected module USR-IO4040, got %s", card.Module)
+	if card.Module != "IO4040" {
+		t.Errorf("Expected module IO4040, got %s", card.Module)
 	}
 
 	if len(card.Last.DI) != 4 {
@@ -171,7 +171,7 @@ func TestManager_QueueWriteDO(t *testing.T) {
 		}
 	}
 
-	card, err := mgr.AddCard("/dev/ttyUSB0", 1, "USR-IO4040")
+	card, err := mgr.AddCard("/dev/ttyUSB0", 1, "IO4040")
 	if err != nil {
 		t.Fatalf("AddCard failed: %v", err)
 	}
@@ -238,13 +238,13 @@ func TestManager_AutoDiscover(t *testing.T) {
 		}
 	}
 
-	// Should detect USR-IO4040
+	// Should detect IO4040
 	card, err := mgr.AddCard("/dev/ttyUSB0", 1, "")
 	if err != nil {
 		t.Fatalf("AddCard auto-detect failed: %v", err)
 	}
 
-	if card.Module != "USR-IO4040" {
-		t.Errorf("Expected detected module USR-IO4040, got %s", card.Module)
+	if card.Module != "IO4040" {
+		t.Errorf("Expected detected module IO4040, got %s", card.Module)
 	}
 }

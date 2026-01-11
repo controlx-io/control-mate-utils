@@ -14,10 +14,6 @@
 
         <!-- Main Content -->
         <div class="lg:pl-64">
-            <!-- TCP Status Banner -->
-            <div id="tcpStatusBanner" class="bg-yellow-500 text-yellow-900 px-4 py-2 text-sm font-medium text-center hidden">
-                <i data-lucide="wifi" class="h-4 w-4 inline-block mr-2"></i>TCP automation client connected - Frontend controls disabled
-            </div>
             <!-- Header -->
             <header class="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div class="container mx-auto px-4 lg:px-6 py-4">
@@ -27,7 +23,14 @@
                                 <i data-lucide="menu" class="h-5 w-5"></i>
                             </button>
                             <div>
-                                <h1 class="text-2xl lg:text-3xl font-bold tracking-tight">Extensions</h1>
+                                <div class="flex items-center gap-3">
+                                    <h1 class="text-2xl lg:text-3xl font-bold tracking-tight">Extensions</h1>
+                                    <div id="tcpStatusBanner" class="hidden">
+                                        <span class="inline-flex items-center rounded-full bg-red-500 dark:bg-red-600 px-3 py-1 text-xs font-medium text-white cursor-help" title="JasperNode connected">
+                                            Control disabled
+                                        </span>
+                                    </div>
+                                </div>
                                 <p class="text-sm lg:text-base text-muted-foreground hidden sm:block">Monitor and control extension cards</p>
                             </div>
                         </div>
@@ -69,13 +72,18 @@
             <div class="space-y-4">
                 <div class="space-y-2">
                     <label class="text-sm font-medium">Output Type</label>
-                    <div class="flex gap-2">
-                        <button type="button" id="aoType4-20mA" class="btn-ctrl flex-1" onclick="setAOType('4-20mA')">
-                            4-20mA
-                        </button>
-                        <button type="button" id="aoType0-10V" class="btn-ctrl flex-1" onclick="setAOType('0-10V')">
-                            0-10V
-                        </button>
+                    <div class="flex items-center gap-3" style="padding: 8px 0;">
+                        <div class="val-display" style="width: 70px; text-align: center;">
+                            <span id="aoModalCurrentType" class="ao-type-display">4-20mA</span>
+                        </div>
+                        <div class="btn-group" style="flex: 1; gap: 8px;">
+                            <button type="button" id="aoType4-20mA" class="btn-ctrl flex-1" style="min-width: 100px;" onclick="setAOType('4-20mA')">
+                                4-20mA
+                            </button>
+                            <button type="button" id="aoType0-10V" class="btn-ctrl flex-1" style="min-width: 100px;" onclick="setAOType('0-10V')">
+                                0-10V
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="space-y-2">
@@ -196,7 +204,7 @@
                 <div class="card-header">
                     <div class="flex-1">
                         <div class="card-title">Card ${card.id}</div>
-                        <div class="card-model">ID: ${card.id} &bull; ${card.module.replace('USR-', '')}</div>
+                        <div class="card-model">ID: ${card.id} &bull; ${card.module}</div>
                         <div class="card-sn">SN: ${sn}</div>
                         <div class="card-timestamp">Updated: ${timestamp}</div>
                     </div>
@@ -366,6 +374,30 @@
                 });
             }
 
+            // Update AO values
+            if (card.last.ao) {
+                card.last.ao.forEach((val, i) => {
+                    const aoItem = cardEl.querySelector(`[data-ao-index="${i}"]`);
+                    if (aoItem) {
+                        const raw = Math.round(val);
+                        const aoType = (card.last.aoType && card.last.aoType[i]) ? card.last.aoType[i] : '4-20mA';
+                        let normalized = 0;
+                        let unit = '';
+                        if (aoType === '0-10V') {
+                            normalized = (raw / 10000) * 10;
+                            unit = 'V';
+                        } else {
+                            normalized = ((raw - 4000) / 16000) * 16 + 4;
+                            unit = 'mA';
+                        }
+                        const rawBadge = aoItem.querySelector('.raw-badge');
+                        const valMain = aoItem.querySelector('.val-main');
+                        if (rawBadge) rawBadge.textContent = `${normalized.toFixed(2)}${unit}`;
+                        if (valMain) valMain.textContent = raw;
+                    }
+                });
+            }
+
             // Update AI values
             if (card.last.ai) {
                 card.last.ai.forEach((val, i) => {
@@ -383,31 +415,6 @@
                 });
             }
 
-            // Update AO values
-            if (card.last.ao) {
-                card.last.ao.forEach((val, i) => {
-                    const aoItem = cardEl.querySelector(`[data-ao-index="${i}"]`);
-                    if (aoItem) {
-                        const raw = Math.round(val);
-                        const aoType = (card.last.aoType && card.last.aoType[i]) ? card.last.aoType[i] : '4-20mA';
-                        let normalized = 0;
-                        let unit = '';
-                        if (aoType === '0-10V') {
-                            // Raw range: 0-10000, Normalized: 0-10V
-                            normalized = (raw / 10000) * 10;
-                            unit = 'V';
-                        } else {
-                            // Raw range: 4000-20000, Normalized: 4-20mA
-                            normalized = ((raw - 4000) / 16000) * 16 + 4;
-                            unit = 'mA';
-                        }
-                        const rawBadge = aoItem.querySelector('.raw-badge');
-                        const valMain = aoItem.querySelector('.val-main');
-                        if (rawBadge) rawBadge.textContent = `${normalized.toFixed(2)}${unit}`;
-                        if (valMain) valMain.textContent = raw;
-                    }
-                });
-            }
         }
 
         function renderDashboard() {
@@ -538,6 +545,7 @@
             });
         }
 
+
         window.showAOControlModal = function(cardId, channel) {
             if (tcpConnected) {
                 showNotification('TCP client is connected - Controls are disabled', 'error');
@@ -564,16 +572,21 @@
             // Update AO type buttons (this will also update value display if needed)
             updateAOTypeButtons(currentAOType);
             
-            // Set initial values - convert to normalized since that's the default mode
+            // Get elements first
             const slider = document.getElementById('aoModalSlider');
             const input = document.getElementById('aoModalValue');
             const rawRange = getRawRange(currentAOType);
-            // Clamp setpoint to valid range
-            const clampedSetpoint = Math.max(rawRange.min, Math.min(rawRange.max, Math.round(setpoint)));
-            // Convert to normalized for display
-            const normalizedValue = rawToNormalized(clampedSetpoint, currentAOType);
+            
+            // Clamp current raw value to valid range
+            const clampedRaw = Math.max(rawRange.min, Math.min(rawRange.max, raw));
+            // Convert to normalized for display (default mode is normalized)
+            const normalizedValue = rawToNormalized(clampedRaw, currentAOType);
+            
+            // Set initial values to current value BEFORE calling updateAOValueDisplay
             slider.value = normalizedValue.toFixed(2);
             input.value = normalizedValue.toFixed(2);
+            
+            // Set up the display ranges and validate values
             updateAOValueDisplay();
             
             const modal = document.getElementById('aoControlModal');
@@ -621,6 +634,11 @@
             currentAOType = selectedType;
             const btn4_20 = document.getElementById('aoType4-20mA');
             const btn0_10 = document.getElementById('aoType0-10V');
+            const currentTypeDisplay = document.getElementById('aoModalCurrentType');
+            
+            if (currentTypeDisplay) {
+                currentTypeDisplay.textContent = selectedType;
+            }
             
             if (btn4_20 && btn0_10) {
                 if (selectedType === '4-20mA') {
@@ -672,10 +690,10 @@
             if (!slider || !input || !label) return;
             
             const rawRange = getRawRange(currentAOType);
-            const currentRaw = parseInt(slider.value) || rawRange.min;
             
             if (aoValueMode === 'normalized') {
-                const normalized = rawToNormalized(currentRaw, currentAOType);
+                // In normalized mode, slider.value is already normalized, keep it
+                const currentNormalized = parseFloat(slider.value) || (currentAOType === '0-10V' ? 0 : 4);
                 const unit = currentAOType === '0-10V' ? 'V' : 'mA';
                 const minNorm = currentAOType === '0-10V' ? 0 : 4;
                 const maxNorm = currentAOType === '0-10V' ? 10 : 20;
@@ -684,17 +702,19 @@
                 slider.min = minNorm;
                 slider.max = maxNorm;
                 slider.step = 0.01;
-                slider.value = normalized.toFixed(2);
+                slider.value = Math.max(minNorm, Math.min(maxNorm, currentNormalized)).toFixed(2);
                 input.min = minNorm;
                 input.max = maxNorm;
                 input.step = 0.01;
-                input.value = normalized.toFixed(2);
+                input.value = Math.max(minNorm, Math.min(maxNorm, currentNormalized)).toFixed(2);
             } else {
+                // In raw mode, slider.value should be raw, convert from normalized if needed
+                const currentRaw = parseInt(slider.value) || rawRange.min;
                 label.textContent = `Raw Value (${rawRange.min}-${rawRange.max})`;
                 slider.min = rawRange.min;
                 slider.max = rawRange.max;
                 slider.step = 1;
-                slider.value = currentRaw;
+                slider.value = Math.max(rawRange.min, Math.min(rawRange.max, currentRaw));
                 input.min = rawRange.min;
                 input.max = rawRange.max;
                 input.step = 1;
@@ -772,6 +792,11 @@
                 return;
             }
             if (currentAOCardId === null || currentAOChannel === null) return;
+            
+            // Show confirmation dialog
+            if (!confirm(`Are you sure you want to change Card ${currentAOCardId} - AO-${currentAOChannel+1} output type to ${type}?\n\nNote: Reboot card is required to take effect.`)) {
+                return;
+            }
             
             updateAOTypeButtons(type);
             
