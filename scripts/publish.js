@@ -94,7 +94,7 @@ Network and resource management utility for ControlMate PC.
 curl -sL https://raw.githubusercontent.com/controlx-io/control-mate-utils/refs/heads/main/scripts/install_to_linux.sh | sudo -E bash -
 \`\`\`
 
-The application will start on port 8080.`;
+The application will start on port 9080.`;
 
   // Create GitHub release
   console.log('🚀 Creating GitHub release...');
