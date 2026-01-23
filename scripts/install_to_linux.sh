@@ -2,7 +2,7 @@
 
 # ==============================================================================
 # control-mate-utils_install.sh
-# v.1.0.0
+# v.1.2.0-1
 #
 # Installs, updates, or uninstalls the control-mate-utils binary as a systemd service.
 #
@@ -230,6 +230,14 @@ if [ "$INSTALLED_VERSION" != "not-installed" ]; then
         echo "${LATEST_VERSION}" > "${VERSION_FILE}"
         chown "${INSTALL_USER}:${INSTALL_USER}" "${BINARY_PATH}" "${VERSION_FILE}"
 
+        # Ensure user is in dialout group for serial port access
+        if getent group dialout > /dev/null 2>&1; then
+            if ! groups "${INSTALL_USER}" | grep -q dialout; then
+                info "Adding ${INSTALL_USER} to dialout group for serial port access..."
+                usermod -a -G dialout "${INSTALL_USER}"
+            fi
+        fi
+
         info "Restarting ${SERVICE_NAME} service..."
         systemctl restart "${SERVICE_NAME}"
 
@@ -283,11 +291,6 @@ fi
 if getent group dialout > /dev/null 2>&1; then
     info "Adding ${INSTALL_USER} to dialout group for serial port access..."
     usermod -a -G dialout "${INSTALL_USER}"
-    # If service is already running, restart it to apply group membership
-    if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
-        info "Restarting service to apply group membership changes..."
-        systemctl restart "${SERVICE_NAME}" || true
-    fi
 else
     warn "dialout group not found. Serial port access may require manual configuration."
 fi
