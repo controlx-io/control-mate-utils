@@ -305,7 +305,9 @@ echo "${LATEST_VERSION}" > "${VERSION_FILE}"
 chown "${INSTALL_USER}:${INSTALL_USER}" "${VERSION_FILE}"
 
 info "Creating polkit rule for full network management permissions..."
-POLKIT_RULE_FILE="/etc/polkit-1/rules.d/55-allow-full-network-management.rules"
+POLKIT_RULES_DIR="/etc/polkit-1/rules.d"
+mkdir -p "${POLKIT_RULES_DIR}"
+POLKIT_RULE_FILE="${POLKIT_RULES_DIR}/55-allow-full-network-management.rules"
 cat << EOF > "${POLKIT_RULE_FILE}"
 // Allow user '${INSTALL_USER}' to fully manage system network connections
 polkit.addRule(function(action, subject) {
@@ -320,7 +322,7 @@ EOF
 chmod 644 "${POLKIT_RULE_FILE}"
 
 info "Creating polkit rule for system power management..."
-POLKIT_POWER_RULE_FILE="/etc/polkit-1/rules.d/56-allow-power-management.rules"
+POLKIT_POWER_RULE_FILE="${POLKIT_RULES_DIR}/56-allow-power-management.rules"
 cat << EOF > "${POLKIT_POWER_RULE_FILE}"
 // Allow user '${INSTALL_USER}' to manage system power (reboot, shutdown, etc.)
 polkit.addRule(function(action, subject) {
