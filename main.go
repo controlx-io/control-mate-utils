@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"control-mate-utils/src/server"
+	"control-mate-utils/src/server/config"
 	"control-mate-utils/src/server/discovery"
 	"control-mate-utils/src/server/localio"
 	"control-mate-utils/src/server/tcp"
@@ -133,8 +134,7 @@ func NewApp() *App {
 	// Initialize local IO manager
 	extMgr := localio.InitializeManager()
 
-	// Initialize TCP server (localOnly=false for testing - accepts connections from all IPs)
-	tcpServer := tcp.NewTCPServer("9081", extMgr, version, true)
+	tcpServer := tcp.NewTCPServer("9081", extMgr, version, config.GetConfig().ServeExternally)
 	if err := tcpServer.Start(); err != nil {
 		log.Printf("Warning: Failed to start TCP server: %v", err)
 	}
@@ -429,7 +429,6 @@ func (app *App) localIOCardHandler(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(map[string]string{"error": "invalid body"})
 			return
 		}
-		log.Printf("writing DO request received for card=%s index=%d state=%v", cardID, req.Index, req.State)
 		if err := app.localioMgr.QueueWriteDO(cardID, req.Index, req.State); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})

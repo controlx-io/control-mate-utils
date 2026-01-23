@@ -18,8 +18,9 @@ const (
 )
 
 type Config struct {
-	DeviceID string `yaml:"device_id"`
-	Type     string `yaml:"type,omitempty"`
+	DeviceID        string `yaml:"device_id"`
+	Type            string `yaml:"type,omitempty"`
+	ServeExternally bool   `yaml:"serve_externally,omitempty"`
 }
 
 var (

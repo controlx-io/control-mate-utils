@@ -14,14 +14,14 @@ import (
 
 // TCPServer manages TCP connections for local IO card automation
 type TCPServer struct {
-	listener     net.Listener
-	clientConn   *ClientConnection
-	mu           sync.RWMutex
-	localioMgr   *localio.Manager
-	stopChan     chan struct{}
-	port         string
-	version      string
-	localOnly    bool // If true, only accept connections from localhost
+	listener   net.Listener
+	clientConn *ClientConnection
+	mu         sync.RWMutex
+	localioMgr *localio.Manager
+	stopChan   chan struct{}
+	port       string
+	version    string
+	localOnly  bool // If true, only accept connections from localhost
 }
 
 // ClientConnection represents a connected TCP client
@@ -35,7 +35,7 @@ type ClientConnection struct {
 
 // CardUpdateMessage is sent to TCP clients
 type CardUpdateMessage struct {
-	Type  string            `json:"type"`
+	Type  string          `json:"type"`
 	Cards []*localio.Card `json:"cards"`
 }
 
@@ -66,14 +66,13 @@ type WriteResponse struct {
 }
 
 // NewTCPServer creates a new TCP server instance
-// localOnly: if true, only accept connections from localhost (default: true for security)
-func NewTCPServer(port string, localioMgr *localio.Manager, version string, localOnly bool) *TCPServer {
+func NewTCPServer(port string, localioMgr *localio.Manager, version string, serveExternally bool) *TCPServer {
 	return &TCPServer{
 		localioMgr: localioMgr,
 		stopChan:   make(chan struct{}),
 		port:       port,
 		version:    version,
-		localOnly:  localOnly,
+		localOnly:  !serveExternally,
 	}
 }
 

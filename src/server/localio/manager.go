@@ -495,13 +495,13 @@ func (m *Manager) ProcessWriteQueue() {
 	for i, op := range queue {
 		c, ok := m.GetCard(op.CardID)
 		if !ok {
-			log.Printf("write queue: card %s not found, skipping", op.CardID)
+			// log.Printf("write queue: card %s not found, skipping", op.CardID)
 			continue
 		}
 
 		pc, err := m.ensurePort(c.PortPath)
 		if err != nil {
-			log.Printf("write queue: failed to get port for card %s: %v", op.CardID, err)
+			// log.Printf("write queue: failed to get port for card %s: %v", op.CardID, err)
 			continue
 		}
 
@@ -509,19 +509,10 @@ func (m *Manager) ProcessWriteQueue() {
 		case writeOpDO:
 			state := op.Value != 0
 			err = pc.writeDO(c.SlaveID, uint16(op.Index), state)
-			if err == nil {
-				log.Printf("[WRITE] DO card=%s slave=%d idx=%d state=%v", op.CardID, c.SlaveID, op.Index, state)
-			}
 		case writeOpAO:
 			err = pc.writeAO(c.SlaveID, op.Index, op.Value)
-			if err == nil {
-				log.Printf("[WRITE] AO card=%s slave=%d idx=%d value=%f", op.CardID, c.SlaveID, op.Index, op.Value)
-			}
 		case writeOpAOType:
 			err = pc.writeAOType(c.SlaveID, op.Index, op.Mode)
-			if err == nil {
-				log.Printf("[WRITE] AO-TYPE card=%s slave=%d idx=%d mode=%s", op.CardID, c.SlaveID, op.Index, op.Mode)
-			}
 		}
 
 		if err != nil {

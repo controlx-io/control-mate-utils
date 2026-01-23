@@ -78,4 +78,3 @@ func FormatUptime(duration time.Duration) string {
 		return fmt.Sprintf("%dm", minutes)
 	}
 }
-

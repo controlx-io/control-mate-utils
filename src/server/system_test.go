@@ -68,7 +68,7 @@ func TestFormatUptime(t *testing.T) {
 		{5 * time.Minute, "5m"},
 		{2*time.Hour + 30*time.Minute, "2h 30m"},
 		{25*time.Hour + 10*time.Minute, "1d 1h 10m"},
-		{48*time.Hour, "2d 0h 0m"},
+		{48 * time.Hour, "2d 0h 0m"},
 		{30 * time.Second, "0m"}, // Integer division results in 0m
 	}
 
@@ -83,4 +83,3 @@ func TestFormatUptime(t *testing.T) {
 // CheckNetworkConnectivity is hard to mock without refactoring net.Dial
 // For now, we skip it or accept it hits real network (which is bad for unit tests)
 // Use Integration test tag or similar if we wanted to include it.
-
