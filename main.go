@@ -522,21 +522,17 @@ func (app *App) rebootHandler(w http.ResponseWriter, r *http.Request) {
 	// For Linux systems, attempt to reboot
 	log.Printf("Reboot requested on %s system", runtime.GOOS)
 
-	// Use systemctl if available (systemd systems)
-	cmd := execCommand("systemctl", "reboot", "-i")
+	// Try /sbin/reboot with sudo (configured in sudoers)
+	cmd := execCommand("sudo", "/sbin/reboot")
 	if err := cmd.Run(); err != nil {
-		// Fallback to reboot command
-		cmd = execCommand("reboot")
+		// Fallback to /sbin/shutdown with sudo
+		cmd = execCommand("sudo", "/sbin/shutdown", "-r", "now")
 		if err := cmd.Run(); err != nil {
-			// Last resort: shutdown -r now
-			cmd = execCommand("shutdown", "-r", "now")
-			if err := cmd.Run(); err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				json.NewEncoder(w).Encode(map[string]string{
-					"error": "Failed to initiate reboot: " + err.Error(),
-				})
-				return
-			}
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Failed to initiate reboot: " + err.Error(),
+			})
+			return
 		}
 	}
 
