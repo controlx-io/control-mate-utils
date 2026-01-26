@@ -1,6 +1,6 @@
 {
   "name": "control-mate-utils",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Network and resource management utility for ControlMate PC",
   "scripts": {
     "test": "go test ./...",
