@@ -273,3 +273,57 @@ func (pc *portClient) reboot(slave byte) error {
 	}
 	return err
 }
+
+// packBits converts a bool slice to packed bytes for Modbus WriteMultipleCoils
+func packBits(values []bool) []byte {
+	byteCount := (len(values) + 7) / 8
+	bytes := make([]byte, byteCount)
+
+	for i, val := range values {
+		if val {
+			byteIdx := i / 8
+			bitIdx := uint(i % 8)
+			bytes[byteIdx] |= (1 << bitIdx)
+		}
+	}
+
+	return bytes
+}
+
+// writeMultipleDO writes multiple coils at once
+func (pc *portClient) writeMultipleDO(slave byte, startIndex uint16, values []bool) error {
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+	setSlaveID(pc.handler, slave)
+
+	// Convert bool slice to byte slice for Modbus
+	quantity := uint16(len(values))
+	bytes := packBits(values)
+
+	_, err := pc.client.WriteMultipleCoils(startIndex, quantity, bytes)
+	if err == nil {
+		time.Sleep(pc.operationDelay) // RS485 delay
+	}
+	return err
+}
+
+// writeMultipleAO writes multiple AO values at once
+func (pc *portClient) writeMultipleAO(slave byte, startIndex int, values []float32) error {
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+	setSlaveID(pc.handler, slave)
+
+	// Each AO value is 2 registers (4 bytes)
+	quantity := uint16(len(values) * 2)
+	buf := make([]byte, len(values)*4)
+
+	for i, val := range values {
+		binary.BigEndian.PutUint32(buf[i*4:(i+1)*4], math.Float32bits(val))
+	}
+
+	_, err := pc.client.WriteMultipleRegisters(uint16(startIndex*2), quantity, buf)
+	if err == nil {
+		time.Sleep(pc.operationDelay) // RS485 delay
+	}
+	return err
+}

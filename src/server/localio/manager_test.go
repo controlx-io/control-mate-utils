@@ -158,13 +158,17 @@ func TestManager_QueueWriteDO(t *testing.T) {
 			ReadDiscreteInputsFunc:   func(address, quantity uint16) ([]byte, error) { return []byte{0}, nil },
 			ReadCoilsFunc:            func(address, quantity uint16) ([]byte, error) { return []byte{0}, nil },
 			ReadHoldingRegistersFunc: func(address, quantity uint16) ([]byte, error) { return make([]byte, 20), nil },
-			WriteSingleCoilFunc: func(address, value uint16) ([]byte, error) {
+			WriteMultipleCoilsFunc: func(address, quantity uint16, value []byte) ([]byte, error) {
 				writeCalled = true
 				if address != 1 {
 					t.Errorf("Expected address 1, got %d", address)
 				}
-				if value != 0xFF00 { // ON
-					t.Errorf("Expected value 0xFF00, got %X", value)
+				if quantity != 1 {
+					t.Errorf("Expected quantity 1, got %d", quantity)
+				}
+				// Check that the coil is set (bit 0 should be set)
+				if len(value) == 0 || (value[0]&0x01) == 0 {
+					t.Error("Expected coil to be set (bit 0)")
 				}
 				return []byte{}, nil
 			},
@@ -182,11 +186,11 @@ func TestManager_QueueWriteDO(t *testing.T) {
 		t.Fatalf("QueueWriteDO failed: %v", err)
 	}
 
-	// Process queue
+	// Process queue (now uses batch processing)
 	mgr.ProcessWriteQueue()
 
 	if !writeCalled {
-		t.Error("WriteSingleCoil was not called")
+		t.Error("WriteMultipleCoils was not called")
 	}
 }
 

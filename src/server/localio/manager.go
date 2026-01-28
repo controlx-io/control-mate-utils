@@ -61,6 +61,16 @@ const (
 	writeOpAOType
 )
 
+// WriteOpType is the exported version of writeOpType for use by TCP server
+type WriteOpType = writeOpType
+
+// WriteOpDO, WriteOpAO, WriteOpAOType are exported constants
+const (
+	WriteOpDO     = writeOpDO
+	WriteOpAO     = writeOpAO
+	WriteOpAOType = writeOpAOType
+)
+
 type writeOperation struct {
 	CardID string
 	Type   writeOpType
@@ -68,6 +78,9 @@ type writeOperation struct {
 	Value  float32 // For DO: bool cast (0=false, 1=true), For AO: float32, For AOType: unused
 	Mode   string  // For AOType only
 }
+
+// WriteOperation is the exported version of writeOperation for use by TCP server
+type WriteOperation = writeOperation
 
 type Manager struct {
 	ports               map[string]*portClient
@@ -484,7 +497,7 @@ func (m *Manager) QueueWriteAOType(cardID string, index int, mode string) error 
 	return nil
 }
 
-// ProcessWriteQueue processes all queued write operations
+// ProcessWriteQueue processes all queued write operations using batch optimization
 func (m *Manager) ProcessWriteQueue() {
 	m.mu.Lock()
 	queue := make([]writeOperation, len(m.writeQueue))
@@ -492,37 +505,17 @@ func (m *Manager) ProcessWriteQueue() {
 	m.writeQueue = m.writeQueue[:0] // Clear the queue
 	m.mu.Unlock()
 
-	for i, op := range queue {
-		c, ok := m.GetCard(op.CardID)
-		if !ok {
-			// log.Printf("write queue: card %s not found, skipping", op.CardID)
-			continue
-		}
+	if len(queue) == 0 {
+		return
+	}
 
-		pc, err := m.ensurePort(c.PortPath)
-		if err != nil {
-			// log.Printf("write queue: failed to get port for card %s: %v", op.CardID, err)
-			continue
-		}
+	// Use batch processing for better performance
+	results := m.ProcessBatchWrite(queue)
 
-		switch op.Type {
-		case writeOpDO:
-			state := op.Value != 0
-			err = pc.writeDO(c.SlaveID, uint16(op.Index), state)
-		case writeOpAO:
-			err = pc.writeAO(c.SlaveID, op.Index, op.Value)
-		case writeOpAOType:
-			err = pc.writeAOType(c.SlaveID, op.Index, op.Mode)
-		}
-
-		if err != nil {
-			log.Printf("write queue: error writing to card %s: %v", op.CardID, err)
-		}
-
-		// Add delay between writes if there are more writes coming
-		// (each write already has operationDelay built-in, but this adds extra spacing for RS485)
-		if i < len(queue)-1 {
-			time.Sleep(m.operationDelay)
+	// Log any errors from batch processing
+	for i, result := range results {
+		if result.Status == "error" {
+			log.Printf("write queue: error writing operation %d: %v", i, result.Message)
 		}
 	}
 }
@@ -553,4 +546,347 @@ func (m *Manager) SetStateChangeCallback(callback StateChangeCallback) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.stateChangeCallback = callback
+}
+
+// CommandResult represents the result of a single command in a batch
+type CommandResult struct {
+	Index   int    `json:"index"`             // Index in the original commands array
+	Status  string `json:"status"`            // "ok" or "error"
+	Message string `json:"message,omitempty"` // Optional error message
+}
+
+// WriteGroup represents a group of write operations that can be combined
+type WriteGroup struct {
+	CardID       string
+	RegisterType writeOpType
+	Operations   []writeOperation
+}
+
+// GroupWriteOperations groups write operations by card and register type
+func (m *Manager) GroupWriteOperations(ops []writeOperation) []WriteGroup {
+	// Group by (cardID, registerType)
+	groups := make(map[string]*WriteGroup)
+
+	for _, op := range ops {
+		key := fmt.Sprintf("%s:%d", op.CardID, op.Type)
+		if group, exists := groups[key]; exists {
+			group.Operations = append(group.Operations, op)
+		} else {
+			groups[key] = &WriteGroup{
+				CardID:       op.CardID,
+				RegisterType: op.Type,
+				Operations:   []writeOperation{op},
+			}
+		}
+	}
+
+	// Convert map to slice
+	result := make([]WriteGroup, 0, len(groups))
+	for _, group := range groups {
+		result = append(result, *group)
+	}
+
+	return result
+}
+
+// shouldWrite checks if a write operation is needed (value changed)
+func (m *Manager) shouldWrite(op writeOperation, card *Card) bool {
+	switch op.Type {
+	case writeOpDO:
+		if op.Index >= 0 && op.Index < len(card.Last.DO) {
+			currentState := card.Last.DO[op.Index]
+			newState := op.Value != 0
+			return currentState != newState
+		}
+	case writeOpAO:
+		if op.Index >= 0 && op.Index < len(card.Last.AO) {
+			currentValue := card.Last.AO[op.Index]
+			return currentValue != op.Value
+		}
+	case writeOpAOType:
+		if op.Index >= 0 && op.Index < len(card.Last.AOType) {
+			currentMode := card.Last.AOType[op.Index]
+			return currentMode != op.Mode
+		}
+	}
+	return true // Default to writing if we can't determine
+}
+
+// ProcessBatchWrite processes a batch of write operations with optimization
+func (m *Manager) ProcessBatchWrite(ops []writeOperation) []CommandResult {
+	results := make([]CommandResult, len(ops))
+
+	// Validate all operations first
+	for i, op := range ops {
+		card, ok := m.GetCard(op.CardID)
+		if !ok {
+			results[i] = CommandResult{
+				Index:   i,
+				Status:  "error",
+				Message: "card not found",
+			}
+			continue
+		}
+
+		// Validate index ranges
+		spec := ModelTable[card.Module]
+		var maxIndex int
+		switch op.Type {
+		case writeOpDO:
+			maxIndex = spec.DO
+		case writeOpAO, writeOpAOType:
+			maxIndex = spec.AO
+		}
+
+		if op.Index < 0 || op.Index >= maxIndex {
+			results[i] = CommandResult{
+				Index:   i,
+				Status:  "error",
+				Message: "index out of range",
+			}
+			continue
+		}
+
+		// Check if value actually changed (skip if unchanged)
+		if !m.shouldWrite(op, card) {
+			results[i] = CommandResult{
+				Index:   i,
+				Status:  "ok",
+				Message: "value unchanged, skipped",
+			}
+			continue
+		}
+	}
+
+	// Filter out operations that failed validation or were skipped
+	// Track mapping: validOps index -> original ops index
+	validOps := make([]writeOperation, 0)
+	validToOrig := make([]int, 0) // Maps validOps[i] -> original ops index
+	for i, op := range ops {
+		if results[i].Status == "" { // Not yet processed (valid operation)
+			validOps = append(validOps, op)
+			validToOrig = append(validToOrig, i)
+		}
+	}
+
+	if len(validOps) == 0 {
+		return results
+	}
+
+	// Group operations by (cardID, registerType)
+	groups := m.GroupWriteOperations(validOps)
+
+	// Process each group
+	for _, group := range groups {
+		groupResults := m.processWriteGroup(group)
+
+		// Map group results back to original indices
+		// Find which validOps indices correspond to this group
+		for j, groupOp := range group.Operations {
+			if j >= len(groupResults) {
+				continue
+			}
+			// Find the index in validOps array
+			validIdx := -1
+			for k, validOp := range validOps {
+				if validOp.CardID == groupOp.CardID &&
+					validOp.Type == groupOp.Type &&
+					validOp.Index == groupOp.Index {
+					validIdx = k
+					break
+				}
+			}
+			// Map back to original index
+			if validIdx >= 0 && validIdx < len(validToOrig) {
+				origIdx := validToOrig[validIdx]
+				results[origIdx] = groupResults[j]
+				results[origIdx].Index = origIdx // Update index to match original position
+			}
+		}
+	}
+
+	return results
+}
+
+// processWriteGroup processes a group of write operations for the same card and register type
+func (m *Manager) processWriteGroup(group WriteGroup) []CommandResult {
+	card, ok := m.GetCard(group.CardID)
+	if !ok {
+		// All operations in group fail
+		results := make([]CommandResult, len(group.Operations))
+		for i := range results {
+			results[i] = CommandResult{
+				Index:   i,
+				Status:  "error",
+				Message: "card not found",
+			}
+		}
+		return results
+	}
+
+	pc, err := m.ensurePort(card.PortPath)
+	if err != nil {
+		results := make([]CommandResult, len(group.Operations))
+		for i := range results {
+			results[i] = CommandResult{
+				Index:   i,
+				Status:  "error",
+				Message: fmt.Sprintf("failed to get port: %v", err),
+			}
+		}
+		return results
+	}
+
+	results := make([]CommandResult, len(group.Operations))
+
+	switch group.RegisterType {
+	case writeOpDO:
+		m.processBatchDO(pc, card, group.Operations, results)
+	case writeOpAO:
+		m.processBatchAO(pc, card, group.Operations, results)
+	case writeOpAOType:
+		m.processBatchAOType(pc, card, group.Operations, results)
+	}
+
+	return results
+}
+
+// processBatchDO processes multiple DO write operations
+func (m *Manager) processBatchDO(pc *portClient, card *Card, ops []writeOperation, results []CommandResult) {
+	if len(ops) == 0 {
+		return
+	}
+
+	// Find min and max indices
+	minIdx := ops[0].Index
+	maxIdx := ops[0].Index
+	for _, op := range ops {
+		if op.Index < minIdx {
+			minIdx = op.Index
+		}
+		if op.Index > maxIdx {
+			maxIdx = op.Index
+		}
+	}
+
+	// Create array covering all indices from min to max
+	count := maxIdx - minIdx + 1
+	values := make([]bool, count)
+
+	// Initialize with cached values
+	for i := 0; i < count; i++ {
+		idx := minIdx + i
+		if idx < len(card.Last.DO) {
+			values[i] = card.Last.DO[idx]
+		}
+	}
+
+	// Override with new values from operations
+	for _, op := range ops {
+		idx := op.Index - minIdx
+		values[idx] = op.Value != 0
+	}
+
+	// Write all coils at once
+	err := pc.writeMultipleDO(card.SlaveID, uint16(minIdx), values)
+
+	// Set results
+	for i := range ops {
+		if err != nil {
+			results[i] = CommandResult{
+				Index:   i,
+				Status:  "error",
+				Message: err.Error(),
+			}
+		} else {
+			results[i] = CommandResult{
+				Index:  i,
+				Status: "ok",
+			}
+		}
+	}
+}
+
+// processBatchAO processes multiple AO write operations
+func (m *Manager) processBatchAO(pc *portClient, card *Card, ops []writeOperation, results []CommandResult) {
+	if len(ops) == 0 {
+		return
+	}
+
+	// Find min and max indices
+	minIdx := ops[0].Index
+	maxIdx := ops[0].Index
+	for _, op := range ops {
+		if op.Index < minIdx {
+			minIdx = op.Index
+		}
+		if op.Index > maxIdx {
+			maxIdx = op.Index
+		}
+	}
+
+	// Create array covering all indices from min to max
+	count := maxIdx - minIdx + 1
+	values := make([]float32, count)
+
+	// Initialize with cached values
+	for i := 0; i < count; i++ {
+		idx := minIdx + i
+		if idx < len(card.Last.AO) {
+			values[i] = card.Last.AO[idx]
+		}
+	}
+
+	// Override with new values from operations
+	for _, op := range ops {
+		idx := op.Index - minIdx
+		values[idx] = op.Value
+	}
+
+	// Write all AO values at once
+	err := pc.writeMultipleAO(card.SlaveID, minIdx, values)
+
+	// Set results
+	for i := range ops {
+		if err != nil {
+			results[i] = CommandResult{
+				Index:   i,
+				Status:  "error",
+				Message: err.Error(),
+			}
+		} else {
+			results[i] = CommandResult{
+				Index:  i,
+				Status: "ok",
+			}
+		}
+	}
+}
+
+// processBatchAOType processes multiple AOType write operations
+func (m *Manager) processBatchAOType(pc *portClient, card *Card, ops []writeOperation, results []CommandResult) {
+	// AOType writes are to different register addresses (0x0190 + index)
+	// They cannot be combined into a single WriteMultipleRegisters if addresses are non-contiguous
+	// For now, process individually but could be optimized if addresses are contiguous
+
+	for i, op := range ops {
+		err := pc.writeAOType(card.SlaveID, op.Index, op.Mode)
+		if err != nil {
+			results[i] = CommandResult{
+				Index:   i,
+				Status:  "error",
+				Message: err.Error(),
+			}
+		} else {
+			results[i] = CommandResult{
+				Index:  i,
+				Status: "ok",
+			}
+		}
+
+		// Add delay between writes if there are more
+		if i < len(ops)-1 {
+			time.Sleep(pc.operationDelay)
+		}
+	}
 }

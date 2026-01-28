@@ -48,9 +48,9 @@ type WelcomeMessage struct {
 	Description string `json:"description"`
 }
 
-// WriteCommand is received from TCP clients
-type WriteCommand struct {
-	Type   string  `json:"type"`
+// WriteCommandItem represents a single command in the commands array
+type WriteCommandItem struct {
+	Type   string  `json:"type"` // "write-do", "write-ao", "write-aotype", "reboot"
 	CardID string  `json:"cardId"`
 	Index  int     `json:"index"`
 	State  bool    `json:"state,omitempty"`
@@ -58,11 +58,19 @@ type WriteCommand struct {
 	Mode   string  `json:"mode,omitempty"`
 }
 
+// WriteCommand is received from TCP clients - always contains an array of commands
+type WriteCommand struct {
+	Type     string             `json:"type"`     // Always "write"
+	Commands []WriteCommandItem `json:"commands"` // Array of individual commands
+}
+
 // WriteResponse is sent back to TCP clients
 type WriteResponse struct {
-	Type    string `json:"type"`
-	Status  string `json:"status"`
-	Message string `json:"message"`
+	Type        string                  `json:"type"`                  // "write-response"
+	Status      string                  `json:"status"`                // "ok" or "error"
+	Results     []localio.CommandResult `json:"results,omitempty"`     // Results for each command
+	Message     string                  `json:"message,omitempty"`     // Error message if status is "error"
+	FailedIndex int                     `json:"failedIndex,omitempty"` // Index of failed command
 }
 
 // NewTCPServer creates a new TCP server instance
@@ -215,7 +223,12 @@ func (s *TCPServer) handleClient(clientConn *ClientConnection) {
 			continue
 		}
 
-		// Process write command
+		// Process write command (always expects array of commands)
+		if cmd.Type != "write" {
+			log.Printf("TCP: unknown message type: %s", cmd.Type)
+			continue
+		}
+
 		s.processWriteCommand(&cmd, clientConn)
 	}
 
@@ -224,162 +237,118 @@ func (s *TCPServer) handleClient(clientConn *ClientConnection) {
 	}
 }
 
-// processWriteCommand processes a write command from TCP client
+// processWriteCommand processes a write command from TCP client (always expects array of commands)
 func (s *TCPServer) processWriteCommand(cmd *WriteCommand, clientConn *ClientConnection) {
-	var err error
-	var response WriteResponse
-
-	switch cmd.Type {
-	case "write-do":
-		// Check if value actually changed
-		card, ok := s.localioMgr.GetCard(cmd.CardID)
-		if !ok {
-			response = WriteResponse{
-				Type:    "write-response",
-				Status:  "error",
-				Message: "card not found",
-			}
-			clientConn.encoder.Encode(response)
-			return
-		}
-
-		// Check if DO value changed
-		if cmd.Index >= 0 && cmd.Index < len(card.Last.DO) {
-			currentState := card.Last.DO[cmd.Index]
-			if currentState == cmd.State {
-				// Value unchanged, skip write
-				response = WriteResponse{
-					Type:    "write-response",
-					Status:  "ok",
-					Message: "value unchanged, skipped",
-				}
-				clientConn.encoder.Encode(response)
-				return
-			}
-		}
-
-		err = s.localioMgr.QueueWriteDO(cmd.CardID, cmd.Index, cmd.State)
-		if err == nil {
-			response = WriteResponse{
-				Type:    "write-response",
-				Status:  "ok",
-				Message: "write queued",
-			}
-		} else {
-			response = WriteResponse{
-				Type:    "write-response",
-				Status:  "error",
-				Message: err.Error(),
-			}
-		}
-
-	case "write-ao":
-		// Check if value actually changed
-		card, ok := s.localioMgr.GetCard(cmd.CardID)
-		if !ok {
-			response = WriteResponse{
-				Type:    "write-response",
-				Status:  "error",
-				Message: "card not found",
-			}
-			clientConn.encoder.Encode(response)
-			return
-		}
-
-		// Check if AO value changed
-		if cmd.Index >= 0 && cmd.Index < len(card.Last.AO) {
-			currentValue := card.Last.AO[cmd.Index]
-			if currentValue == cmd.Value {
-				// Value unchanged, skip write
-				response = WriteResponse{
-					Type:    "write-response",
-					Status:  "ok",
-					Message: "value unchanged, skipped",
-				}
-				clientConn.encoder.Encode(response)
-				return
-			}
-		}
-
-		err = s.localioMgr.QueueWriteAO(cmd.CardID, cmd.Index, cmd.Value)
-		if err == nil {
-			response = WriteResponse{
-				Type:    "write-response",
-				Status:  "ok",
-				Message: "write queued",
-			}
-		} else {
-			response = WriteResponse{
-				Type:    "write-response",
-				Status:  "error",
-				Message: err.Error(),
-			}
-		}
-
-	case "write-aotype":
-		// Check if AO type actually changed
-		card, ok := s.localioMgr.GetCard(cmd.CardID)
-		if !ok {
-			response = WriteResponse{
-				Type:    "write-response",
-				Status:  "error",
-				Message: "card not found",
-			}
-			clientConn.encoder.Encode(response)
-			return
-		}
-
-		// Check if AO type changed
-		if cmd.Index >= 0 && cmd.Index < len(card.Last.AOType) {
-			currentMode := card.Last.AOType[cmd.Index]
-			if currentMode == cmd.Mode {
-				// Value unchanged, skip write
-				response = WriteResponse{
-					Type:    "write-response",
-					Status:  "ok",
-					Message: "value unchanged, skipped",
-				}
-				clientConn.encoder.Encode(response)
-				return
-			}
-		}
-
-		err = s.localioMgr.QueueWriteAOType(cmd.CardID, cmd.Index, cmd.Mode)
-		if err == nil {
-			response = WriteResponse{
-				Type:    "write-response",
-				Status:  "ok",
-				Message: "write queued",
-			}
-		} else {
-			response = WriteResponse{
-				Type:    "write-response",
-				Status:  "error",
-				Message: err.Error(),
-			}
-		}
-
-	case "reboot":
-		err = s.localioMgr.RebootCard(cmd.CardID)
-		if err == nil {
-			response = WriteResponse{
-				Type:    "write-response",
-				Status:  "ok",
-				Message: "reboot command sent",
-			}
-		} else {
-			response = WriteResponse{
-				Type:    "write-response",
-				Status:  "error",
-				Message: err.Error(),
-			}
-		}
-
-	default:
-		response = WriteResponse{
+	if len(cmd.Commands) == 0 {
+		response := WriteResponse{
 			Type:    "write-response",
 			Status:  "error",
-			Message: "unknown command type",
+			Message: "no commands in batch",
+		}
+		clientConn.encoder.Encode(response)
+		return
+	}
+
+	// Separate write operations from reboot commands
+	ops := make([]localio.WriteOperation, 0, len(cmd.Commands))
+	rebootIndices := make([]int, 0) // Track indices of reboot commands
+
+	for i, cmdItem := range cmd.Commands {
+		if cmdItem.Type == "reboot" {
+			rebootIndices = append(rebootIndices, i)
+			continue
+		}
+
+		op := localio.WriteOperation{
+			CardID: cmdItem.CardID,
+			Index:  cmdItem.Index,
+		}
+
+		switch cmdItem.Type {
+		case "write-do":
+			op.Type = localio.WriteOpDO
+			if cmdItem.State {
+				op.Value = 1.0
+			}
+		case "write-ao":
+			op.Type = localio.WriteOpAO
+			op.Value = cmdItem.Value
+		case "write-aotype":
+			op.Type = localio.WriteOpAOType
+			op.Mode = cmdItem.Mode
+		default:
+			// Skip unknown command types
+			continue
+		}
+
+		ops = append(ops, op)
+	}
+
+	// Initialize results array for all commands
+	results := make([]localio.CommandResult, len(cmd.Commands))
+
+	// Process reboot commands first
+	for _, idx := range rebootIndices {
+		cmdItem := cmd.Commands[idx]
+		err := s.localioMgr.RebootCard(cmdItem.CardID)
+		if err != nil {
+			results[idx] = localio.CommandResult{
+				Index:   idx,
+				Status:  "error",
+				Message: err.Error(),
+			}
+		} else {
+			results[idx] = localio.CommandResult{
+				Index:  idx,
+				Status: "ok",
+			}
+		}
+	}
+
+	// Process write operations if any
+	if len(ops) > 0 {
+		writeResults := s.localioMgr.ProcessBatchWrite(ops)
+
+		// Map write results back to original command indices
+		// Create a mapping: original command index -> write operation index
+		writeOpIdx := 0
+		for i, cmdItem := range cmd.Commands {
+			if cmdItem.Type == "reboot" {
+				continue // Already processed
+			}
+			if cmdItem.Type == "write-do" || cmdItem.Type == "write-ao" || cmdItem.Type == "write-aotype" {
+				if writeOpIdx < len(writeResults) {
+					results[i] = writeResults[writeOpIdx]
+					results[i].Index = i // Update index to match original command position
+					writeOpIdx++
+				}
+			}
+		}
+	}
+
+	// Convert results to response format
+	responseResults := make([]localio.CommandResult, len(results))
+	for i, result := range results {
+		responseResults[i] = localio.CommandResult{
+			Index:   result.Index,
+			Status:  result.Status,
+			Message: result.Message,
+		}
+	}
+
+	response := WriteResponse{
+		Type:    "write-response",
+		Status:  "ok",
+		Results: responseResults,
+	}
+
+	// Check if any command failed
+	for i, result := range results {
+		if result.Status == "error" {
+			response.Status = "error"
+			response.FailedIndex = i
+			response.Message = result.Message
+			break
 		}
 	}
 
