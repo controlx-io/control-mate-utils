@@ -33,6 +33,30 @@ type HandlerFactory func(path string, cfg serialCfg) (ModbusHandler, error)
 // StateChangeCallback is called when card state changes (DI or AI values)
 type StateChangeCallback func(cards []*Card)
 
+// SafeStateConfig defines the safe state values for outputs when JN (TCP client) disconnects
+// This configuration is easily editable for future changes
+type SafeStateConfig struct {
+	// DOState is the safe state for all digital outputs (false = open/off)
+	DOState bool
+	// AOVoltageValue is the safe value for analog outputs configured as 0-10V
+	AOVoltageValue float32
+	// AOCurrentValue is the safe value for analog outputs configured as 4-20mA
+	AOCurrentValue float32
+}
+
+// DefaultSafeStateConfig returns the default safe state configuration
+// Digital outputs: false (open/off)
+// Analog outputs are specified in engineering units and will be written as value * 1000:
+// - 0-10V: volts (e.g. 0.0 -> 0)
+// - 4-20mA: milliamps (e.g. 4.0 -> 4000)
+func DefaultSafeStateConfig() SafeStateConfig {
+	return SafeStateConfig{
+		DOState:        false, // Digital outputs open/off
+		AOVoltageValue: 0.0,   // Volts (will be written as V * 1000)
+		AOCurrentValue: 4.0,   // mA (will be written as mA * 1000)
+	}
+}
+
 type CardState struct {
 	Timestamp    time.Time `json:"timestamp"`
 	DI           []bool    `json:"di,omitempty"`
@@ -96,6 +120,7 @@ type Manager struct {
 	clientFactory       ClientFactory       // Factory for creating modbus clients
 	handlerFactory      HandlerFactory      // Factory for creating modbus handlers
 	stateChangeCallback StateChangeCallback // Callback for state changes (DI/AI)
+	safeStateConfig     SafeStateConfig     // Safe state configuration for outputs
 }
 
 func defaultHandlerFactory(path string, cfg serialCfg) (ModbusHandler, error) {
@@ -109,17 +134,18 @@ func defaultHandlerFactory(path string, cfg serialCfg) (ModbusHandler, error) {
 
 func NewManager() *Manager {
 	return &Manager{
-		ports:          make(map[string]*portClient),
-		cards:          make(map[string]*Card),
-		nextID:         1,
-		serial:         serialCfg{Baud: 9600, Par: "N", Stop: 1, Data: 8},
-		timeout:        200 * time.Millisecond,
-		cycleDelay:     10 * time.Millisecond,
-		operationDelay: 2 * time.Millisecond,
-		writeQueue:     make([]writeOperation, 0),
-		stopChan:       make(chan struct{}),
-		clientFactory:  modbus.NewClient,
-		handlerFactory: defaultHandlerFactory,
+		ports:           make(map[string]*portClient),
+		cards:           make(map[string]*Card),
+		nextID:          1,
+		serial:          serialCfg{Baud: 9600, Par: "N", Stop: 1, Data: 8},
+		timeout:         200 * time.Millisecond,
+		cycleDelay:      10 * time.Millisecond,
+		operationDelay:  2 * time.Millisecond,
+		writeQueue:      make([]writeOperation, 0),
+		stopChan:        make(chan struct{}),
+		clientFactory:   modbus.NewClient,
+		handlerFactory:  defaultHandlerFactory,
+		safeStateConfig: DefaultSafeStateConfig(),
 	}
 }
 
@@ -889,4 +915,86 @@ func (m *Manager) processBatchAOType(pc *portClient, card *Card, ops []writeOper
 			time.Sleep(pc.operationDelay)
 		}
 	}
+}
+
+// WriteAllOutputsToSafeState writes all DO and AO outputs to their safe state values
+// This is called when JN (TCP client) disconnects to ensure all outputs are in a safe state
+func (m *Manager) WriteAllOutputsToSafeState() error {
+	m.mu.Lock()
+	cards := make([]*Card, 0, len(m.cards))
+	for _, c := range m.cards {
+		cards = append(cards, c)
+	}
+	safeConfig := m.safeStateConfig
+	m.mu.Unlock()
+
+	var firstErr error
+	for _, card := range cards {
+		spec := ModelTable[card.Module]
+
+		// Get port for this card
+		pc, err := m.ensurePort(card.PortPath)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("card %s: failed to get port: %v", card.ID, err)
+			}
+			log.Printf("WriteAllOutputsToSafeState: card %s port error: %v", card.ID, err)
+			continue
+		}
+
+		// Write all DO outputs to safe state (false = open/off)
+		if spec.DO > 0 {
+			doValues := make([]bool, spec.DO)
+			for i := range doValues {
+				doValues[i] = safeConfig.DOState
+			}
+			err := pc.writeMultipleDO(card.SlaveID, 0, doValues)
+			if err != nil {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("card %s: failed to write DO to safe state: %v", card.ID, err)
+				}
+				log.Printf("WriteAllOutputsToSafeState: card %s DO write error: %v", card.ID, err)
+			} else {
+				log.Printf("WriteAllOutputsToSafeState: card %s - set all %d DO outputs to safe state (%v)", card.ID, spec.DO, safeConfig.DOState)
+			}
+		}
+
+		// Write all AO outputs to safe state based on their type
+		if spec.AO > 0 {
+			// Read current AO types if not already cached
+			m.mu.Lock()
+			cardState := card.Last
+			m.mu.Unlock()
+
+			aoValues := make([]float32, spec.AO)
+			for i := 0; i < spec.AO; i++ {
+				// Determine safe value based on AO type
+				if i < len(cardState.AOType) && cardState.AOType[i] == "4-20mA" {
+					// Safe config is in mA; module expects raw value = mA * 1000
+					aoValues[i] = safeConfig.AOCurrentValue * 1000
+				} else {
+					// Default to voltage value (0-10V or unknown type)
+					// Safe config is in V; module expects raw value = V * 1000
+					aoValues[i] = safeConfig.AOVoltageValue * 1000
+				}
+			}
+
+			err := pc.writeMultipleAO(card.SlaveID, 0, aoValues)
+			if err != nil {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("card %s: failed to write AO to safe state: %v", card.ID, err)
+				}
+				log.Printf("WriteAllOutputsToSafeState: card %s AO write error: %v", card.ID, err)
+			} else {
+				log.Printf("WriteAllOutputsToSafeState: card %s - set all %d AO outputs to safe state", card.ID, spec.AO)
+			}
+		}
+	}
+
+	if firstErr != nil {
+		return fmt.Errorf("WriteAllOutputsToSafeState completed with errors: %v", firstErr)
+	}
+
+	log.Printf("WriteAllOutputsToSafeState: all outputs set to safe state successfully")
+	return nil
 }

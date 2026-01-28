@@ -207,12 +207,21 @@ func (s *TCPServer) acceptLoop() {
 func (s *TCPServer) handleClient(clientConn *ClientConnection) {
 	defer func() {
 		s.mu.Lock()
-		if s.clientConn == clientConn {
+		wasConnected := s.clientConn == clientConn
+		if wasConnected {
 			s.clientConn = nil
 		}
 		s.mu.Unlock()
 		clientConn.conn.Close()
 		log.Printf("TCP client disconnected")
+
+		// When JN (TCP client) disconnects, write all outputs to safe state
+		if wasConnected {
+			log.Printf("JN disconnected - writing all outputs to safe state")
+			if err := s.localioMgr.WriteAllOutputsToSafeState(); err != nil {
+				log.Printf("Error writing outputs to safe state: %v", err)
+			}
+		}
 	}()
 
 	scanner := bufio.NewScanner(clientConn.conn)
