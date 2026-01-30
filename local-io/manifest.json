@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "name": "local-io",
+  "title": "Local IO",
+  "tools": {
+    "local-io": {
+      "label": "Local IO",
+      "path": "index.html"
+    }
+  }
+}

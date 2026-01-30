@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Local IO</title>
+  <link href="../base1/cockpit.css" rel="stylesheet">
+  <link href="local-io.css" rel="stylesheet">
+</head>
+<body>
+  <div id="local-io-loading" class="local-io-loading" aria-live="polite">
+    <div class="local-io-loading-spinner"></div>
+    <p class="local-io-loading-text">Loading…</p>
+  </div>
+  <div class="container-fluid">
+    <h1>Local IO</h1>
+    <div class="local-io-toolbar">
+      <span id="status" class="local-io-status"></span>
+    </div>
+    <div id="app-container" class="local-io-cards">
+      <p class="local-io-hint">Loading cards…</p>
+    </div>
+  </div>
+  <div id="local-io-ao-modal" class="local-io-modal local-io-modal-hidden" role="dialog" aria-modal="true" aria-labelledby="local-io-ao-modal-title">
+    <div class="local-io-modal-backdrop"></div>
+    <div class="local-io-modal-content">
+      <div class="local-io-modal-header">
+        <div class="local-io-modal-header-inner">
+          <h2 id="local-io-ao-modal-title" class="local-io-modal-title">Set Analog Output</h2>
+          <p id="local-io-ao-modal-channel" class="local-io-modal-channel">Configure output value</p>
+        </div>
+        <button type="button" id="local-io-ao-modal-close" class="local-io-modal-close" aria-label="Close">×</button>
+      </div>
+      <div class="local-io-modal-body">
+        <div class="local-io-modal-section">
+          <label class="local-io-modal-label">Output Type</label>
+          <div class="local-io-modal-type-row">
+            <span id="local-io-ao-modal-current-type" class="local-io-modal-type-display">4-20mA</span>
+            <div class="local-io-modal-btn-group">
+              <button type="button" id="local-io-ao-type-4-20" class="local-io-btn-ctrl-modal">4-20mA</button>
+              <button type="button" id="local-io-ao-type-0-10" class="local-io-btn-ctrl-modal">0-10V</button>
+            </div>
+          </div>
+        </div>
+        <div class="local-io-modal-section">
+          <div class="local-io-modal-value-header">
+            <label for="local-io-ao-modal-value" id="local-io-ao-modal-value-label" class="local-io-modal-label">Normalized Value (4–20 mA)</label>
+            <div class="local-io-modal-toggle-row">
+              <span class="local-io-modal-toggle-label">Raw</span>
+              <label class="local-io-toggle">
+                <input type="checkbox" id="local-io-ao-value-mode-toggle" class="local-io-toggle-input">
+                <span class="local-io-toggle-slider"></span>
+              </label>
+              <span class="local-io-modal-toggle-label">Normalized</span>
+            </div>
+          </div>
+          <div class="local-io-modal-value-row">
+            <input type="range" id="local-io-ao-modal-slider" class="local-io-modal-slider" min="4" max="20" step="0.01" value="4">
+            <input type="number" id="local-io-ao-modal-value" class="local-io-modal-input local-io-modal-input-narrow" min="4" max="20" step="0.01" value="4">
+          </div>
+        </div>
+      </div>
+      <div class="local-io-modal-footer">
+        <button type="button" id="local-io-ao-modal-cancel" class="local-io-btn-secondary">Cancel</button>
+        <button type="button" id="local-io-ao-modal-set" class="local-io-btn-primary">Set</button>
+      </div>
+    </div>
+  </div>
+  <script src="../base1/cockpit.js"></script>
+  <script src="local-io.js"></script>
+</body>
+</html>
